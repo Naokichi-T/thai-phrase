@@ -2,12 +2,29 @@
   // ダミーデータ（あとでSupabaseから取得するデータのイメージ）
   const phrase = {
     id: 1,
-    order_symbol: "A-001", // 表示順を管理する記号
-    thai: "ใครๆก็อยากมีความสุข", // タイ語フレーズ
-    japanese: "誰もが幸せになりたい。", // 日本語フレーズ
-    audio_th: "00001_th.mp3", // タイ語音声ファイル名
-    audio_ja: "00001_ja.mp3", // 日本語音声ファイル名
+    order_symbol: "A-001",
+    thai: "สวัสดีครับ",
+    japanese: "こんにちは",
+    audio_th: "00001_th.mp3",
+    audio_ja: "00001_ja.mp3",
   };
+
+  // Supabase StorageのベースURL
+  // ファイル名をつなげるだけで音声のURLが完成する
+  const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
+
+  /**
+   * 音声を再生する関数
+   * @param {string} filename - 再生するファイル名（例：00001_th.mp3）
+   */
+  function playAudio(filename) {
+    // URLを組み立てる
+    const url = STORAGE_BASE_URL + filename;
+
+    // Audioオブジェクトを作って再生する
+    const audio = new Audio(url);
+    audio.play();
+  }
 </script>
 
 <!-- ページ全体のコンテナ -->
@@ -20,8 +37,8 @@
     <!-- タイ語フレーズ -->
     <p class="thai">{phrase.thai}</p>
 
-    <!-- タイ語の音声ボタン（まだ動かない） -->
-    <button class="audio-btn">🔊 タイ語</button>
+    <!-- タイ語の音声ボタン -->
+    <button class="audio-btn" onclick={() => playAudio(phrase.audio_th)}> 🔊 タイ語 </button>
 
     <!-- 区切り線 -->
     <hr />
@@ -29,8 +46,8 @@
     <!-- 日本語フレーズ -->
     <p class="japanese">{phrase.japanese}</p>
 
-    <!-- 日本語の音声ボタン（まだ動かない） -->
-    <button class="audio-btn">🔊 日本語</button>
+    <!-- 日本語の音声ボタン -->
+    <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 日本語 </button>
   </div>
 </div>
 
@@ -60,6 +77,7 @@
     margin: 0 0 12px 0;
   }
 
+  /* タイ語：20px、Sarabunフォント */
   .thai {
     font-family: "Sarabun", sans-serif;
     font-size: 20px;
@@ -67,6 +85,7 @@
     line-height: 1.6;
   }
 
+  /* 日本語：18px */
   .japanese {
     font-family: "Sarabun", sans-serif;
     font-size: 18px;
