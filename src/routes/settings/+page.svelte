@@ -20,10 +20,7 @@
 
 <div class="container">
   <!-- 戻るボタン -->
-  <div class="header">
-    <a href="/" class="back-btn">← 戻る</a>
-    <h1 class="title">設定</h1>
-  </div>
+  <h1 class="title">設定</h1>
 
   <div class="settings-list">
     <!-- タイ語の再生スピード -->
@@ -134,26 +131,7 @@
     padding: 24px 16px;
   }
 
-  /* ヘッダー（戻るボタン＋タイトル） */
-  .header {
-    width: 100%;
-    max-width: 400px;
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-
-  .back-btn {
-    color: #666;
-    text-decoration: none;
-    font-size: 14px;
-  }
-
-  .back-btn:hover {
-    color: #333;
-  }
-
+  /* ヘッダー（タイトル） */
   .title {
     font-family: "Sarabun", sans-serif;
     font-size: 20px;
