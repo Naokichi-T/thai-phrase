@@ -1,6 +1,7 @@
 <script>
   // --- 状態変数 ---
   let status = $state(null); // カードのステータス（null / "ok" / "ng" / "pending"）
+  let isFavorite = $state(false); // trueのとき★、falseのとき☆
 
   // ダミーデータ（あとでSupabaseから取得するデータのイメージ）
   const phrase = {
@@ -34,6 +35,10 @@
 <div class="container">
   <!-- カード本体 -->
   <div class="card">
+    <!-- お気に入りボタン：カード右上に配置 -->
+    <button class="favorite-btn" onclick={() => (isFavorite = !isFavorite)}>
+      {isFavorite ? "★" : "☆"}
+    </button>
     <!-- 表示順の記号 -->
     <p class="order">{phrase.order_symbol}</p>
 
@@ -74,6 +79,7 @@
 
   /* カード：スマホは画面幅いっぱい、PCは800px */
   .card {
+    position: relative;
     width: 100%;
     max-width: 800px;
     background: white;
@@ -169,5 +175,22 @@
     border-color: #ff9800;
     color: #e65100;
     font-weight: bold;
+  }
+
+  /* お気に入りボタン：カード右上に固定 */
+  .favorite-btn {
+    position: absolute; /* カードの中で位置を指定する */
+    top: 16px;
+    right: 16px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #f5a623; /* オレンジ系の黄色 */
+    line-height: 1;
+  }
+
+  .favorite-btn:hover {
+    transform: scale(1.2); /* ホバーで少し大きくなる */
   }
 </style>
