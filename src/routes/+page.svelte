@@ -60,18 +60,16 @@
     margin: 0 0 12px 0;
   }
 
-  /* タイ語：仕様通り18px、Sarabunフォント */
   .thai {
     font-family: "Sarabun", sans-serif;
-    font-size: 18px;
+    font-size: 20px;
     margin: 0 0 8px 0;
     line-height: 1.6;
   }
 
-  /* 日本語：仕様通り16px */
   .japanese {
     font-family: "Sarabun", sans-serif;
-    font-size: 16px;
+    font-size: 18px;
     margin: 0 0 8px 0;
     line-height: 1.6;
   }
