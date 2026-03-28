@@ -21,12 +21,14 @@
   // 指が触れたときX座標を記録する
   function handleTouchStart(e) {
     touchStartX = e.touches[0].clientX;
+    console.log("touchstart:", touchStartX); // ← 追加
   }
 
   // 指が離れたときスワイプ距離を計算して前後に移動する
   function handleTouchEnd(e) {
     const touchEndX = e.changedTouches[0].clientX;
     const diff = touchEndX - touchStartX;
+    console.log("touchend:", touchEndX, "diff:", diff); // ← 追加
 
     // 50px以上動いたときだけスワイプとみなす
     if (diff > 50) {
