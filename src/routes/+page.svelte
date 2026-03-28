@@ -2,6 +2,8 @@
   // --- 状態変数 ---
   let status = $state(null); // カードのステータス（null / "ok" / "ng" / "pending"）
   let isFavorite = $state(false); // trueのとき★、falseのとき☆
+  let showMemo = $state(false); // メモの開閉状態
+  let memoText = $state(""); // メモの内容
 
   // ダミーデータ（あとでSupabaseから取得するデータのイメージ）
   const phrase = {
@@ -28,6 +30,15 @@
     // Audioオブジェクトを作って再生する
     const audio = new Audio(url);
     audio.play();
+  }
+
+  /**
+   * テキストエリアの高さを内容に合わせて自動調整する関数
+   * @param {HTMLTextAreaElement} el - テキストエリアの要素
+   */
+  function autoResize(el) {
+    el.style.height = "auto"; // 一度リセットしてから
+    el.style.height = el.scrollHeight + "px"; // 実際の高さに合わせる
   }
 </script>
 
@@ -66,6 +77,19 @@
       <button class="status-btn ng {status === 'ng' ? 'active' : ''}" onclick={() => (status = "ng")}>NG</button>
 
       <button class="status-btn pending {status === 'pending' ? 'active' : ''}" onclick={() => (status = "pending")}>保留</button>
+    </div>
+
+    <!-- メモエリア -->
+    <div class="memo-area">
+      <!-- ✏️ボタン：押すと入力欄が開閉する -->
+      <button class="memo-toggle" onclick={() => (showMemo = !showMemo)}>
+        ✏️ {showMemo ? "メモを閉じる" : "メモを開く"}
+      </button>
+
+      <!-- showMemoがtrueのときだけ表示する -->
+      {#if showMemo}
+        <textarea class="memo-input" placeholder="メモを入力..." bind:value={memoText} oninput={(e) => autoResize(e.target)}></textarea>
+      {/if}
     </div>
   </div>
 </div>
@@ -201,5 +225,44 @@
 
   .favorite-btn:hover {
     transform: scale(1.2); /* ホバーで少し大きくなる */
+  }
+
+  /* メモエリア全体 */
+  .memo-area {
+    margin-top: 16px;
+  }
+
+  /* メモ開閉ボタン */
+  .memo-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #999;
+    padding: 0;
+  }
+
+  .memo-toggle:hover {
+    color: #666;
+  }
+
+  /* メモ入力欄 */
+  .memo-input {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: "Sarabun", sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+    resize: none; /* 手動リサイズを無効にする（自動調整するため） */
+    box-sizing: border-box; /* paddingを含めた幅にする */
+    min-height: 60px;
+  }
+
+  .memo-input:focus {
+    outline: none;
+    border-color: #aaa;
   }
 </style>
