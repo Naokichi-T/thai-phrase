@@ -15,6 +15,7 @@
   let currentAudio = null; // 再生中のAudioオブジェクトを保持する変数（カード切り替え時に止めるために使う）
   let isStopped = $state(false); // 自動送りが停止中かどうか（trueのとき自動送りしない）
   let touchStartX = 0; // スワイプ開始時のX座標を記録する変数
+  let cardEl = $state(null);
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -37,6 +38,21 @@
       prevCard(); // 左スワイプ → 前へ
     }
   }
+
+  // カード要素が準備できたらタッチイベントを登録する
+  $effect(() => {
+    if (!cardEl) return;
+
+    // passive: false にすることでイベントを確実に受け取る
+    cardEl.addEventListener("touchstart", handleTouchStart, { passive: true });
+    cardEl.addEventListener("touchend", handleTouchEnd, { passive: true });
+
+    // コンポーネントが破棄されたときにイベントを解除する
+    return () => {
+      cardEl.removeEventListener("touchstart", handleTouchStart);
+      cardEl.removeEventListener("touchend", handleTouchEnd);
+    };
+  });
 
   /**
    * 音声を再生する関数
@@ -248,7 +264,7 @@
     <p>読み込み中...</p>
   {:else}
     <!-- カード本体 -->
-    <div class="card" role="region" aria-label="フレーズカード" ontouchstart={handleTouchStart} ontouchend={handleTouchEnd}>
+    <div class="card" role="region" aria-label="フレーズカード" bind:this={cardEl}>
       <!-- お気に入りボタン：カード右上に配置 -->
       <button class="favorite-btn" onclick={toggleFavorite}>
         {isFavorite ? "★" : "☆"}
