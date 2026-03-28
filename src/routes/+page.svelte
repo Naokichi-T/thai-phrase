@@ -1,10 +1,13 @@
 <script>
+  // --- 状態変数 ---
+  let status = $state(null); // カードのステータス（null / "ok" / "ng" / "pending"）
+
   // ダミーデータ（あとでSupabaseから取得するデータのイメージ）
   const phrase = {
     id: 1,
     order_symbol: "A-001",
-    thai: "สวัสดีครับ",
-    japanese: "こんにちは",
+    thai: "ใครๆก็อยากมีความสุข",
+    japanese: "誰もが幸せになりたい。",
     audio_th: "00001_th.mp3",
     audio_ja: "00001_ja.mp3",
   };
@@ -48,6 +51,16 @@
 
     <!-- 日本語の音声ボタン -->
     <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 日本語 </button>
+
+    <!-- ステータスボタン -->
+    <div class="status-buttons">
+      <!-- 押したボタンに応じてactiveクラスをつける -->
+      <button class="status-btn ok {status === 'ok' ? 'active' : ''}" onclick={() => (status = "ok")}>OK</button>
+
+      <button class="status-btn ng {status === 'ng' ? 'active' : ''}" onclick={() => (status = "ng")}>NG</button>
+
+      <button class="status-btn pending {status === 'pending' ? 'active' : ''}" onclick={() => (status = "pending")}>保留</button>
+    </div>
   </div>
 </div>
 
@@ -113,5 +126,48 @@
     border: none;
     border-top: 1px solid #eee;
     margin: 16px 0;
+  }
+
+  /* ステータスボタンのエリア */
+  .status-buttons {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0;
+  }
+
+  /* ステータスボタン共通 */
+  .status-btn {
+    flex: 1; /* 3つを均等幅に */
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    font-size: 16px;
+    cursor: pointer;
+    font-family: "Sarabun", sans-serif;
+  }
+
+  /* OK：緑 */
+  .status-btn.ok.active {
+    background: #e6f4ea;
+    border-color: #4caf50;
+    color: #2e7d32;
+    font-weight: bold;
+  }
+
+  /* NG：赤 */
+  .status-btn.ng.active {
+    background: #fdecea;
+    border-color: #f44336;
+    color: #c62828;
+    font-weight: bold;
+  }
+
+  /* 保留：オレンジ */
+  .status-btn.pending.active {
+    background: #fff3e0;
+    border-color: #ff9800;
+    color: #e65100;
+    font-weight: bold;
   }
 </style>
