@@ -1,19 +1,29 @@
 <script>
+  import { onMount } from "svelte";
+  import { supabase } from "$lib/supabase";
+
   // --- 状態変数 ---
   let status = $state(null); // カードのステータス（null / "ok" / "ng" / "pending"）
   let isFavorite = $state(false); // trueのとき★、falseのとき☆
   let showMemo = $state(false); // メモの開閉状態
   let memoText = $state(""); // メモの内容
+  let phrase = $state(null); // 表示するフレーズ（最初はnull、Supabaseから取得したら入る）
 
-  // ダミーデータ（あとでSupabaseから取得するデータのイメージ）
-  const phrase = {
-    id: 1,
-    order_symbol: "A-001",
-    thai: "ใครๆก็อยากมีความสุข",
-    japanese: "誰もが幸せになりたい。",
-    audio_th: "00001_th.mp3",
-    audio_ja: "00001_ja.mp3",
-  };
+  // ページが表示されたときにSupabaseからフレーズを取得する
+  onMount(async () => {
+    const { data, error } = await supabase
+      .from("phrases")
+      .select("*")
+      .eq("id", 1) // id=1のフレーズを取得
+      .single(); // 1件だけ取得する
+
+    if (error) {
+      console.error("取得エラー:", error);
+      return;
+    }
+
+    phrase = data;
+  });
 
   // Supabase StorageのベースURL
   // ファイル名をつなげるだけで音声のURLが完成する
@@ -44,54 +54,59 @@
 
 <!-- ページ全体のコンテナ -->
 <div class="container">
-  <!-- カード本体 -->
-  <div class="card">
-    <!-- お気に入りボタン：カード右上に配置 -->
-    <button class="favorite-btn" onclick={() => (isFavorite = !isFavorite)}>
-      {isFavorite ? "★" : "☆"}
-    </button>
-    <!-- 表示順の記号 -->
-    <p class="order">{phrase.order_symbol}</p>
-
-    <!-- 音声ボタンとタイ語フレーズ -->
-    <div class="phrase-row">
-      <button class="audio-btn" onclick={() => playAudio(phrase.audio_th)}> 🔊 </button>
-      <p class="thai">{phrase.thai}</p>
-    </div>
-
-    <!-- 区切り線 -->
-    <hr />
-
-    <!-- 音声ボタンと日本語フレーズ -->
-    <!-- 変更後 -->
-    <div class="phrase-row">
-      <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 </button>
-      <p class="japanese">{phrase.japanese}</p>
-    </div>
-
-    <!-- ステータスボタン -->
-    <div class="status-buttons">
-      <!-- 押したボタンに応じてactiveクラスをつける -->
-      <button class="status-btn ok {status === 'ok' ? 'active' : ''}" onclick={() => (status = "ok")}>OK</button>
-
-      <button class="status-btn ng {status === 'ng' ? 'active' : ''}" onclick={() => (status = "ng")}>NG</button>
-
-      <button class="status-btn pending {status === 'pending' ? 'active' : ''}" onclick={() => (status = "pending")}>保留</button>
-    </div>
-
-    <!-- メモエリア -->
-    <div class="memo-area">
-      <!-- ✏️ボタン：押すと入力欄が開閉する -->
-      <button class="memo-toggle" onclick={() => (showMemo = !showMemo)}>
-        ✏️ {showMemo ? "メモを閉じる" : "メモを開く"}
+  <!-- phraseがnullのあいだは「読み込み中」を表示する -->
+  {#if phrase === null}
+    <p>読み込み中...</p>
+  {:else}
+    <!-- カード本体 -->
+    <div class="card">
+      <!-- お気に入りボタン：カード右上に配置 -->
+      <button class="favorite-btn" onclick={() => (isFavorite = !isFavorite)}>
+        {isFavorite ? "★" : "☆"}
       </button>
+      <!-- 表示順の記号 -->
+      <p class="order">{phrase.order_symbol}</p>
 
-      <!-- showMemoがtrueのときだけ表示する -->
-      {#if showMemo}
-        <textarea class="memo-input" placeholder="メモを入力..." bind:value={memoText} oninput={(e) => autoResize(e.target)}></textarea>
-      {/if}
+      <!-- 音声ボタンとタイ語フレーズ -->
+      <div class="phrase-row">
+        <button class="audio-btn" onclick={() => playAudio(phrase.audio_th)}> 🔊 </button>
+        <p class="thai">{phrase.thai}</p>
+      </div>
+
+      <!-- 区切り線 -->
+      <hr />
+
+      <!-- 音声ボタンと日本語フレーズ -->
+      <!-- 変更後 -->
+      <div class="phrase-row">
+        <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 </button>
+        <p class="japanese">{phrase.japanese}</p>
+      </div>
+
+      <!-- ステータスボタン -->
+      <div class="status-buttons">
+        <!-- 押したボタンに応じてactiveクラスをつける -->
+        <button class="status-btn ok {status === 'ok' ? 'active' : ''}" onclick={() => (status = "ok")}>OK</button>
+
+        <button class="status-btn ng {status === 'ng' ? 'active' : ''}" onclick={() => (status = "ng")}>NG</button>
+
+        <button class="status-btn pending {status === 'pending' ? 'active' : ''}" onclick={() => (status = "pending")}>保留</button>
+      </div>
+
+      <!-- メモエリア -->
+      <div class="memo-area">
+        <!-- ✏️ボタン：押すと入力欄が開閉する -->
+        <button class="memo-toggle" onclick={() => (showMemo = !showMemo)}>
+          ✏️ {showMemo ? "メモを閉じる" : "メモを開く"}
+        </button>
+
+        <!-- showMemoがtrueのときだけ表示する -->
+        {#if showMemo}
+          <textarea class="memo-input" placeholder="メモを入力..." bind:value={memoText} oninput={(e) => autoResize(e.target)}></textarea>
+        {/if}
+      </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <style>
