@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
+  import { loadSettings } from "$lib/settings";
 
   // --- 状態変数 ---
   let phrases = $state([]); // 全フレーズのリスト
@@ -11,18 +12,51 @@
   let memoText = $state(""); // メモの内容
   let showMemo = $state(false); // メモの開閉状態
   let userId = $state(null); // ログイン中のユーザーIDを保持する変数
+  let currentAudio = null; // 再生中のAudioオブジェクトを保持する変数（カード切り替え時に止めるために使う）
+  let isStopped = $state(false); // 自動送りが停止中かどうか（trueのとき自動送りしない）
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
-  function playAudio(filename) {
-    const url = STORAGE_BASE_URL + filename;
-    const audio = new Audio(url);
-    audio.play();
+  /**
+   * 音声を再生する関数
+   * 再生が終わったらPromiseが解決される（終了を待てるようになる）
+   * @param {string} filename - 再生するファイル名
+   * @param {number} speed - 再生スピード
+   */
+  function playAudio(filename, speed) {
+    return new Promise((resolve) => {
+      // 再生中の音声があれば止める
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio = null;
+      }
+
+      const url = STORAGE_BASE_URL + filename;
+      const audio = new Audio(url);
+      audio.playbackRate = speed;
+
+      // 再生が終わったらPromiseを解決する
+      audio.onended = () => resolve();
+
+      currentAudio = audio;
+      audio.play();
+    });
   }
 
   function autoResize(el) {
     el.style.height = "auto";
     el.style.height = el.scrollHeight + "px";
+  }
+
+  // 自動送りを停止する
+  function stopAutoAdvance() {
+    isStopped = true;
+
+    // 再生中の音声も止める
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+    }
   }
 
   // ページが表示されたときにSupabaseからフレーズを取得する
@@ -111,13 +145,66 @@
       isFavorite = statusData.is_favorite;
       memoText = statusData.memo ?? "";
     }
+
+    // 設定を読み込む
+    const settings = loadSettings();
+
+    // 自動再生・自動送りの処理
+    // async IIFEを使ってawaitを使えるようにする
+    (async () => {
+      // 停止中なら何もしない
+      if (isStopped) return;
+
+      const playThai = async () => {
+        if (settings.autoPlayThai && phrase?.audio_th) {
+          await playAudio(phrase.audio_th, settings.speedThai);
+        }
+      };
+      const playJapanese = async () => {
+        if (settings.autoPlayJapanese && phrase?.audio_ja) {
+          await playAudio(phrase.audio_ja, settings.speedJapanese);
+        }
+      };
+
+      if (settings.autoPlayOrder === "japanese_first") {
+        await playJapanese();
+        await playThai();
+      } else {
+        await playThai();
+        await playJapanese();
+      }
+
+      // 停止ボタンが押されていたら次に進まない
+      if (isStopped) return;
+
+      if (settings.autoAdvanceEnabled && (settings.autoPlayThai || settings.autoPlayJapanese)) {
+        await new Promise((resolve) => setTimeout(resolve, settings.autoAdvance * 1000));
+
+        // 待機中に停止ボタンが押されていたら次に進まない
+        if (isStopped) return;
+
+        // 最後のカードのとき
+        if (currentIndex >= phrases.length - 1) {
+          if (settings.loopEnabled) {
+            // ループがONなら最初に戻る
+            currentIndex = 0;
+            await loadStatus(phrases[0].id);
+          }
+          // ループがOFFなら何もしない
+          return;
+        }
+
+        nextCard();
+      }
+    })();
   }
 
   /**
    * 次のカードに移動する
    */
   async function nextCard() {
-    if (currentIndex >= phrases.length - 1) return; // 最後のカードなら何もしない
+    if (currentIndex >= phrases.length - 1) return;
+    isStopped = false; // 手動で次へ移動したら停止を解除する
     currentIndex += 1;
     await loadStatus(phrase.id);
   }
@@ -126,7 +213,8 @@
    * 前のカードに移動する
    */
   async function prevCard() {
-    if (currentIndex <= 0) return; // 最初のカードなら何もしない
+    if (currentIndex <= 0) return;
+    isStopped = false; // 手動で前へ移動したら停止を解除する
     currentIndex -= 1;
     await loadStatus(phrase.id);
   }
@@ -149,7 +237,7 @@
 
       <!-- 音声ボタンとタイ語フレーズ -->
       <div class="phrase-row">
-        <button class="audio-btn" onclick={() => playAudio(phrase.audio_th)}> 🔊 </button>
+        <button class="audio-btn" onclick={() => playAudio(phrase.audio_th, loadSettings().speedThai)}> 🔊 </button>
         <p class="thai">{phrase.thai}</p>
       </div>
 
@@ -159,7 +247,7 @@
       <!-- 音声ボタンと日本語フレーズ -->
       <!-- 変更後 -->
       <div class="phrase-row">
-        <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 </button>
+        <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja, loadSettings().speedJapanese)}> 🔊 </button>
         <p class="japanese">{phrase.japanese}</p>
       </div>
 
@@ -191,9 +279,13 @@
       <div class="navigation">
         <button class="nav-btn" onclick={prevCard} disabled={currentIndex === 0}>← 前へ</button>
 
-        <span class="nav-count">
-          {currentIndex + 1} / {phrases.length}
-        </span>
+        <div class="nav-center">
+          <span class="nav-count">{currentIndex + 1} / {phrases.length}</span>
+          <!-- 自動送りがONのときだけ停止ボタンを表示 -->
+          {#if loadSettings().autoAdvanceEnabled && !isStopped}
+            <button class="stop-btn" onclick={stopAutoAdvance}>⏹ 停止</button>
+          {/if}
+        </div>
 
         <button class="nav-btn" onclick={nextCard} disabled={currentIndex === phrases.length - 1}>次へ →</button>
       </div>
@@ -412,5 +504,26 @@
     color: #999;
     min-width: 60px;
     text-align: center;
+  }
+
+  .nav-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .stop-btn {
+    padding: 4px 12px;
+    background: white;
+    border: 1px solid #f44336;
+    border-radius: 6px;
+    color: #f44336;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .stop-btn:hover {
+    background: #fdecea;
   }
 </style>

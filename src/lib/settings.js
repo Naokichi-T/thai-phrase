@@ -4,7 +4,10 @@ const DEFAULTS = {
   speedJapanese: 1.0, // 日本語の再生スピード 0.7〜1.3の範囲
   autoPlayThai: false, // タイ語を自動再生するか
   autoPlayJapanese: false, // 日本語を自動再生するか
-  autoAdvance: 5, // 自動送りの表示秒数
+  autoPlayOrder: "thai_first", // 再生順：'thai_first' or 'japanese_first'
+  autoAdvance: 3, // 自動送りの表示秒数
+  autoAdvanceEnabled: false, // 自動送りのON/OFF
+  loopEnabled: false, // ループのON/OFF
 };
 
 // localStorageのキー名

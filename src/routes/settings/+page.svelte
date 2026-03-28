@@ -72,18 +72,49 @@
           日本語
         </label>
       </div>
+
+      <!-- タイ語・日本語どちらもONのときだけ再生順を表示 -->
+      {#if settings.autoPlayThai && settings.autoPlayJapanese}
+        <div class="radio-group" style="margin-top: 12px">
+          <p class="setting-label" style="font-size: 14px; color: #999; margin: 0 0 8px 0">再生順</p>
+          <label class="radio-label">
+            <input type="radio" bind:group={settings.autoPlayOrder} value="thai_first" />
+            タイ語 → 日本語
+          </label>
+          <label class="radio-label">
+            <input type="radio" bind:group={settings.autoPlayOrder} value="japanese_first" />
+            日本語 → タイ語
+          </label>
+        </div>
+      {/if}
     </div>
 
     <hr />
 
-    <!-- 自動送りの表示秒数 -->
-    <div class="setting-item setting-row">
-      <p class="setting-label">自動送りの表示秒数</p>
-      <div class="number-input">
-        <button onclick={() => (settings.autoAdvance = Math.max(1, settings.autoAdvance - 1))}>−</button>
-        <span>{settings.autoAdvance}秒</span>
-        <button onclick={() => (settings.autoAdvance = Math.min(30, settings.autoAdvance + 1))}>＋</button>
+    <div class="setting-item">
+      <!-- 自動送りのON/OFF -->
+      <div class="setting-row">
+        <p class="setting-label" style="margin: 0">自動送り</p>
+        <input type="checkbox" class="toggle" bind:checked={settings.autoAdvanceEnabled} />
       </div>
+
+      <!-- 自動送りがONのときだけ秒数を表示 -->
+      {#if settings.autoAdvanceEnabled}
+        <div class="setting-row" style="margin-top: 12px">
+          <p class="setting-label" style="margin: 0; color: #999; font-size: 14px">音声終了後の待機秒数</p>
+          <div class="number-input">
+            <button onclick={() => (settings.autoAdvance = Math.max(1, settings.autoAdvance - 1))}>−</button>
+            <span>{settings.autoAdvance}秒</span>
+            <button onclick={() => (settings.autoAdvance = Math.min(30, settings.autoAdvance + 1))}>＋</button>
+          </div>
+        </div>
+      {/if}
+    </div>
+
+    <!-- ループ -->
+    <div class="setting-item setting-row">
+      <p class="setting-label" style="margin: 0">ループ再生</p>
+      <input type="checkbox" class="toggle" bind:checked={settings.loopEnabled} />
     </div>
 
     <hr />
@@ -259,6 +290,21 @@
   }
 
   .checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 15px;
+    color: #555;
+    cursor: pointer;
+  }
+
+  .radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .radio-label {
     display: flex;
     align-items: center;
     gap: 8px;
