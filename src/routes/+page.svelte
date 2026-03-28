@@ -10,12 +10,21 @@
   let phrase = $state(null); // 表示するフレーズ（最初はnull、Supabaseから取得したら入る）
 
   // ページが表示されたときにSupabaseからフレーズを取得する
+  // 変更後
   onMount(async () => {
-    const { data, error } = await supabase
-      .from("phrases")
-      .select("*")
-      .eq("id", 1) // id=1のフレーズを取得
-      .single(); // 1件だけ取得する
+    // ログインしているか確認する
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    // ログインしていなければログインページに移動
+    if (!session) {
+      window.location.href = "/login";
+      return;
+    }
+
+    // ログインしていればフレーズを取得する
+    const { data, error } = await supabase.from("phrases").select("*").eq("id", 1).single();
 
     if (error) {
       console.error("取得エラー:", error);
