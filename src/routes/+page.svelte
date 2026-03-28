@@ -3,11 +3,25 @@
   import { supabase } from "$lib/supabase";
 
   // --- 状態変数 ---
+  let phrase = $state(null); // 表示するフレーズ（最初はnull、Supabaseから取得したら入る）
   let status = $state(null); // カードのステータス（null / "ok" / "ng" / "pending"）
   let isFavorite = $state(false); // trueのとき★、falseのとき☆
-  let showMemo = $state(false); // メモの開閉状態
   let memoText = $state(""); // メモの内容
-  let phrase = $state(null); // 表示するフレーズ（最初はnull、Supabaseから取得したら入る）
+  let showMemo = $state(false); // メモの開閉状態
+  let userId = $state(null); // ログイン中のユーザーIDを保持する変数
+
+  const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
+
+  function playAudio(filename) {
+    const url = STORAGE_BASE_URL + filename;
+    const audio = new Audio(url);
+    audio.play();
+  }
+
+  function autoResize(el) {
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }
 
   // ページが表示されたときにSupabaseからフレーズを取得する
   // 変更後
@@ -16,48 +30,72 @@
     const {
       data: { session },
     } = await supabase.auth.getSession();
-
-    // ログインしていなければログインページに移動
     if (!session) {
       window.location.href = "/login";
       return;
     }
 
-    // ログインしていればフレーズを取得する
-    const { data, error } = await supabase.from("phrases").select("*").eq("id", 1).single();
+    // ユーザーIDを保存しておく
+    userId = session.user.id;
 
-    if (error) {
-      console.error("取得エラー:", error);
+    // フレーズを取得する
+    const { data: phraseData, error: phraseError } = await supabase.from("phrases").select("*").eq("id", 1).single();
+
+    if (phraseError) {
+      console.error("フレーズ取得エラー:", phraseError);
       return;
     }
 
-    phrase = data;
+    phrase = phraseData;
+
+    // このフレーズのステータスを取得する
+    const { data: statusData } = await supabase.from("phrase_status").select("*").eq("user_id", userId).eq("phrase_id", phrase.id).single();
+
+    // ステータスが既に保存されていれば画面に反映する
+    if (statusData) {
+      status = statusData.status;
+      isFavorite = statusData.is_favorite;
+      memoText = statusData.memo ?? "";
+    }
   });
 
-  // Supabase StorageのベースURL
-  // ファイル名をつなげるだけで音声のURLが完成する
-  const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
-
   /**
-   * 音声を再生する関数
-   * @param {string} filename - 再生するファイル名（例：00001_th.mp3）
+   * ステータス・お気に入り・メモをSupabaseに保存する関数
+   * upsert：データがあれば更新、なければ追加する
+   * @param {object} fields - 更新するフィールド
    */
-  function playAudio(filename) {
-    // URLを組み立てる
-    const url = STORAGE_BASE_URL + filename;
+  async function saveStatus(fields) {
+    if (!userId || !phrase) return;
 
-    // Audioオブジェクトを作って再生する
-    const audio = new Audio(url);
-    audio.play();
+    const { error } = await supabase.from("phrase_status").upsert(
+      {
+        user_id: userId,
+        phrase_id: phrase.id,
+        status, // 現在のstatus
+        is_favorite: isFavorite, // 現在のisFavorite
+        memo: memoText, // 現在のmemoText
+        ...fields, // 上書きしたいフィールド
+      },
+      {
+        onConflict: "user_id,phrase_id", // この組み合わせが同じなら更新する
+      },
+    );
+
+    if (error) {
+      console.error("保存エラー:", error);
+    }
   }
 
-  /**
-   * テキストエリアの高さを内容に合わせて自動調整する関数
-   * @param {HTMLTextAreaElement} el - テキストエリアの要素
-   */
-  function autoResize(el) {
-    el.style.height = "auto"; // 一度リセットしてから
-    el.style.height = el.scrollHeight + "px"; // 実際の高さに合わせる
+  // ステータスボタンを押したときの処理
+  async function setStatus(newStatus) {
+    status = newStatus;
+    await saveStatus({ status: newStatus });
+  }
+
+  // お気に入りボタンを押したときの処理
+  async function toggleFavorite() {
+    isFavorite = !isFavorite;
+    await saveStatus({ is_favorite: isFavorite });
   }
 </script>
 
@@ -70,7 +108,7 @@
     <!-- カード本体 -->
     <div class="card">
       <!-- お気に入りボタン：カード右上に配置 -->
-      <button class="favorite-btn" onclick={() => (isFavorite = !isFavorite)}>
+      <button class="favorite-btn" onclick={toggleFavorite}>
         {isFavorite ? "★" : "☆"}
       </button>
       <!-- 表示順の記号 -->
@@ -95,11 +133,11 @@
       <!-- ステータスボタン -->
       <div class="status-buttons">
         <!-- 押したボタンに応じてactiveクラスをつける -->
-        <button class="status-btn ok {status === 'ok' ? 'active' : ''}" onclick={() => (status = "ok")}>OK</button>
+        <button class="status-btn ok {status === 'ok' ? 'active' : ''}" onclick={() => setStatus("ok")}>OK</button>
 
-        <button class="status-btn ng {status === 'ng' ? 'active' : ''}" onclick={() => (status = "ng")}>NG</button>
+        <button class="status-btn ng {status === 'ng' ? 'active' : ''}" onclick={() => setStatus("ng")}>NG</button>
 
-        <button class="status-btn pending {status === 'pending' ? 'active' : ''}" onclick={() => (status = "pending")}>保留</button>
+        <button class="status-btn pending {status === 'pending' ? 'active' : ''}" onclick={() => setStatus("pending")}>保留</button>
       </div>
 
       <!-- メモエリア -->
@@ -111,7 +149,7 @@
 
         <!-- showMemoがtrueのときだけ表示する -->
         {#if showMemo}
-          <textarea class="memo-input" placeholder="メモを入力..." bind:value={memoText} oninput={(e) => autoResize(e.target)}></textarea>
+          <textarea class="memo-input" placeholder="メモを入力..." bind:value={memoText} oninput={(e) => autoResize(e.target)} onblur={() => saveStatus({ memo: memoText })}></textarea>
         {/if}
       </div>
     </div>
