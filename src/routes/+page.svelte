@@ -42,20 +42,21 @@
     <!-- 表示順の記号 -->
     <p class="order">{phrase.order_symbol}</p>
 
-    <!-- タイ語フレーズ -->
-    <p class="thai">{phrase.thai}</p>
-
-    <!-- タイ語の音声ボタン -->
-    <button class="audio-btn" onclick={() => playAudio(phrase.audio_th)}> 🔊 タイ語 </button>
+    <!-- 音声ボタンとタイ語フレーズ -->
+    <div class="phrase-row">
+      <button class="audio-btn" onclick={() => playAudio(phrase.audio_th)}> 🔊 </button>
+      <p class="thai">{phrase.thai}</p>
+    </div>
 
     <!-- 区切り線 -->
     <hr />
 
-    <!-- 日本語フレーズ -->
-    <p class="japanese">{phrase.japanese}</p>
-
-    <!-- 日本語の音声ボタン -->
-    <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 日本語 </button>
+    <!-- 音声ボタンと日本語フレーズ -->
+    <!-- 変更後 -->
+    <div class="phrase-row">
+      <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja)}> 🔊 </button>
+      <p class="japanese">{phrase.japanese}</p>
+    </div>
 
     <!-- ステータスボタン -->
     <div class="status-buttons">
@@ -96,35 +97,43 @@
     margin: 0 0 12px 0;
   }
 
-  /* タイ語：20px、Sarabunフォント */
+  /* タイ語 */
   .thai {
     font-family: "Sarabun", sans-serif;
     font-size: 20px;
-    margin: 0 0 8px 0;
+    margin: 0;
     line-height: 1.6;
   }
 
-  /* 日本語：18px */
+  /* 日本語 */
   .japanese {
     font-family: "Sarabun", sans-serif;
     font-size: 18px;
-    margin: 0 0 8px 0;
+    margin: 0;
     line-height: 1.6;
   }
 
   /* 音声ボタン */
   .audio-btn {
-    background: #f0f0f0;
+    background: none;
     border: none;
-    border-radius: 6px;
-    padding: 6px 12px;
+    padding: 0;
     cursor: pointer;
-    font-size: 14px;
-    margin-bottom: 8px;
+    font-size: 20px;
+    line-height: 1;
+    flex-shrink: 0;
   }
 
   .audio-btn:hover {
-    background: #e0e0e0;
+    transform: scale(1.2); /* ホバーで少し大きくなる */
+  }
+
+  /* フレーズとボタンを横並びにするコンテナ */
+  .phrase-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
   }
 
   /* 区切り線 */
