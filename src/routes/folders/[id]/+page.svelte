@@ -325,7 +325,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 16px;
+    padding: 4px 16px;
   }
 
   /* フォルダ名タイトル */

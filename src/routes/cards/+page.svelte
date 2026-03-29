@@ -177,6 +177,41 @@
     folders = data;
   }
 
+  /**
+   * フラットなフォルダリストをツリー構造に変換する
+   * @param {Array} allFolders - 全フォルダのリスト
+   * @param {number|null} parentId - 親フォルダのID
+   */
+  function buildTree(allFolders, parentId) {
+    return allFolders
+      .filter((f) => f.parent_id === parentId)
+      .map((f) => ({
+        ...f,
+        children: buildTree(allFolders, f.id),
+      }));
+  }
+
+  /**
+   * ツリー構造をフラットな配列に変換する（インデントレベル付き）
+   * チェックボックスリストの表示に使う
+   * @param {Array} nodes - ツリーのノード
+   * @param {number} depth - 現在の階層の深さ（0始まり）
+   */
+  function flattenTree(nodes, depth = 0) {
+    const result = [];
+    for (const node of nodes) {
+      result.push({ ...node, depth }); // depthを付けて追加する
+      if (node.children.length > 0) {
+        // 子フォルダを再帰的に追加する
+        result.push(...flattenTree(node.children, depth + 1));
+      }
+    }
+    return result;
+  }
+
+  // ツリー構造にしてからフラットに展開したフォルダリスト
+  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
+
   // このフレーズがどのフォルダに入っているか取得する
   async function loadPhraseFolders(phraseId) {
     selectedFolderIds = []; // いったんリセット
@@ -377,9 +412,9 @@
             <p class="folder-empty">フォルダがありません。<a href="/folders">フォルダを作る</a></p>
           {:else}
             <ul class="folder-check-list">
-              {#each folders as folder}
+              {#each flatFolders as folder}
                 <li>
-                  <label class="folder-check-item">
+                  <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
                     <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
                     📁 {folder.name}
                   </label>
