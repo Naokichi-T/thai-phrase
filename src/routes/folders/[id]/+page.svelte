@@ -19,6 +19,9 @@
   let currentAudio = null; // 再生中のAudioオブジェクト
   let isStopped = $state(false); // 自動送りが停止中かどうか
   let touchStartX = 0; // スワイプ開始時のX座標
+  let folders = $state([]); // 全フォルダのリスト
+  let selectedFolderIds = $state([]); // このフレーズが入っているフォルダIDのリスト
+  let showFolderPicker = $state(false); // フォルダ選択エリアの開閉状態
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -98,6 +101,9 @@
 
     userId = session.user.id;
 
+    // フォルダ一覧を取得する（一度だけ取得すればOK）
+    await loadFolders();
+
     // フォルダ名を取得する
     const { data: folderData } = await supabase.from("folders").select("name").eq("id", folderId).single();
 
@@ -173,6 +179,73 @@
     await saveStatus({ is_favorite: isFavorite });
   }
 
+  // フォルダ一覧をSupabaseから取得する
+  async function loadFolders() {
+    const { data, error } = await supabase.from("folders").select("*").eq("user_id", userId).order("name", { ascending: true });
+
+    if (error) {
+      console.error("フォルダ取得エラー:", error);
+      return;
+    }
+
+    folders = data;
+  }
+
+  // このフレーズがどのフォルダに入っているか取得する
+  async function loadPhraseFolders(phraseId) {
+    selectedFolderIds = [];
+
+    const { data, error } = await supabase.from("phrase_folders").select("folder_id").eq("phrase_id", phraseId);
+
+    if (error) {
+      console.error("フレーズフォルダ取得エラー:", error);
+      return;
+    }
+
+    selectedFolderIds = data.map((row) => row.folder_id);
+  }
+
+  // ツリー構造に変換する
+  function buildTree(allFolders, parentId) {
+    return allFolders
+      .filter((f) => f.parent_id === parentId)
+      .map((f) => ({
+        ...f,
+        children: buildTree(allFolders, f.id),
+      }));
+  }
+
+  // ツリーをインデントレベル付きのフラットなリストに変換する
+  function flattenTree(nodes, depth = 0) {
+    const result = [];
+    for (const node of nodes) {
+      result.push({ ...node, depth });
+      if (node.children.length > 0) {
+        result.push(...flattenTree(node.children, depth + 1));
+      }
+    }
+    return result;
+  }
+
+  // 表示用のフォルダリスト
+  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
+
+  // チェックボックスを切り替えたときの処理
+  async function toggleFolder(folderId) {
+    if (selectedFolderIds.includes(folderId)) {
+      await supabase.from("phrase_folders").delete().eq("phrase_id", phrase.id).eq("folder_id", folderId);
+
+      selectedFolderIds = selectedFolderIds.filter((id) => id !== folderId);
+    } else {
+      await supabase.from("phrase_folders").insert({
+        phrase_id: phrase.id,
+        folder_id: folderId,
+      });
+
+      selectedFolderIds = [...selectedFolderIds, folderId];
+    }
+  }
+
   /**
    * 指定したフレーズIDのステータスをSupabaseから取得して画面に反映する
    * @param {number} phraseId - フレーズのID
@@ -182,6 +255,7 @@
     isFavorite = false;
     memoText = "";
     showMemo = false;
+    showFolderPicker = false;
 
     const { data: statusData } = await supabase.from("phrase_status").select("*").eq("user_id", userId).eq("phrase_id", phraseId).single();
 
@@ -190,6 +264,9 @@
       isFavorite = statusData.is_favorite;
       memoText = statusData.memo ?? "";
     }
+
+    // このフレーズがどのフォルダに入っているか取得する
+    await loadPhraseFolders(phraseId);
 
     // 設定を読み込む
     const settings = loadSettings();
@@ -300,6 +377,33 @@
         </button>
         {#if showMemo}
           <textarea class="memo-input" placeholder="メモを入力..." bind:value={memoText} oninput={(e) => autoResize(e.target)} onblur={() => saveStatus({ memo: memoText })}></textarea>
+        {/if}
+      </div>
+
+      <!-- フォルダ選択エリア -->
+      <div class="folder-area">
+        <button class="folder-toggle" onclick={() => (showFolderPicker = !showFolderPicker)}>
+          📁 {showFolderPicker ? "フォルダを閉じる" : "フォルダに追加"}
+          {#if selectedFolderIds.length > 0}
+            <span class="folder-badge">{selectedFolderIds.length}</span>
+          {/if}
+        </button>
+
+        {#if showFolderPicker}
+          {#if folders.length === 0}
+            <p class="folder-empty">フォルダがありません。<a href="/folders">フォルダを作る</a></p>
+          {:else}
+            <ul class="folder-check-list">
+              {#each flatFolders as folder}
+                <li>
+                  <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
+                    <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
+                    📁 {folder.name}
+                  </label>
+                </li>
+              {/each}
+            </ul>
+          {/if}
         {/if}
       </div>
     </div>
@@ -543,5 +647,56 @@
 
   .stop-btn:hover {
     background: #fdecea;
+  }
+
+  /* フォルダエリア全体 */
+  .folder-area {
+    margin-top: 12px;
+  }
+
+  .folder-toggle {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #999;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .folder-toggle:hover {
+    color: #666;
+  }
+
+  .folder-badge {
+    background: #2d2a4a;
+    color: white;
+    border-radius: 10px;
+    padding: 1px 7px;
+    font-size: 12px;
+  }
+
+  .folder-empty {
+    font-size: 13px;
+    color: #999;
+    margin-top: 8px;
+  }
+
+  .folder-check-list {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0 0;
+  }
+
+  .folder-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
   }
 </style>
