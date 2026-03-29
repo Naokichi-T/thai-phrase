@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
   import { loadSettings } from "$lib/settings";
+  import { page } from "$app/stores";
 
   // --- 状態変数 ---
   let phrases = $state([]); // 全フレーズのリスト
@@ -24,6 +25,7 @@
   let allPhrases = $state([]); // フィルター前の全フレーズ
   let allStatuses = $state({}); // 全フレーズのステータス（phrase_id → status）
   let statusFilter = $state("all"); // 現在選択中のタブ
+  let fromSearch = $state(false); // 検索から来たかどうか
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -132,10 +134,21 @@
 
     // 全フレーズを保持しておく
     allPhrases = sortPhrases(phraseData, sortOrder);
-    phrases = allPhrases;
 
-    // 最初のフレーズのステータスを取得する
-    await loadStatus(phraseData[0].id);
+    // URLパラメータを確認して、検索からの遷移か判定する
+    const q = $page.url.searchParams.get("q") ?? "";
+    const target = $page.url.searchParams.get("target") ?? "thai";
+    const phraseId = $page.url.searchParams.get("phraseId");
+    fromSearch = $page.url.searchParams.get("from") === "search";
+
+    if (q && phraseId) {
+      // 検索結果で絞り込んで、タップしたフレーズから表示する
+      await applySearchFilter(q, target, Number(phraseId));
+    } else {
+      phrases = allPhrases;
+      // 最初のフレーズのステータスを取得する
+      await loadStatus(phraseData[0].id);
+    }
   });
 
   /**
@@ -432,9 +445,33 @@
     }
   }
 
+  // 検索キーワードと対象列でフレーズを絞り込み、指定したフレーズから表示する
+  async function applySearchFilter(q, target, phraseId) {
+    const lower = q.toLowerCase();
+    let filtered = [];
+
+    if (target === "thai" || target === "japanese") {
+      filtered = allPhrases.filter((p) => (p[target] ?? "").toLowerCase().includes(lower));
+    } else if (target === "memo") {
+      const phraseIds = allPhrases.map((p) => p.id);
+      const { data: memoData } = await supabase.from("phrase_status").select("phrase_id, memo").eq("user_id", userId).in("phrase_id", phraseIds);
+
+      const matchedIds = new Set((memoData ?? []).filter((r) => (r.memo ?? "").toLowerCase().includes(lower)).map((r) => r.phrase_id));
+      filtered = allPhrases.filter((p) => matchedIds.has(p.id));
+    }
+
+    phrases = sortPhrases(filtered, sortOrder);
+
+    // タップしたフレーズのインデックスを探して、そこから表示する
+    const idx = phrases.findIndex((p) => p.id === phraseId);
+    currentIndex = idx !== -1 ? idx : 0;
+
+    if (phrases.length > 0) await loadStatus(phrases[currentIndex].id);
+  }
+
   // 各タブの件数を返す
   function countByFilter(filter) {
-    if (filter === "all") return allPhrases.length;
+    if (filter === "all") return phrases.length;
     if (filter === "none") return allPhrases.filter((p) => !allStatuses[p.id]?.status).length;
     if (filter === "favorite") return allPhrases.filter((p) => allStatuses[p.id]?.isFavorite).length;
     return allPhrases.filter((p) => allStatuses[p.id]?.status === filter).length;
@@ -445,6 +482,9 @@
 <div class="container">
   <!-- 並び順セレクトボックス -->
   <div class="sort-area">
+    {#if fromSearch}
+      <button class="back-btn" onclick={() => history.back()}>← 検索結果に戻る</button>
+    {/if}
     <select class="sort-select" value={sortOrder} onchange={(e) => changeSortOrder(e.target.value)}>
       <option value="asc">記号の昇順</option>
       <option value="desc">記号の降順</option>
@@ -850,7 +890,22 @@
     max-width: 800px;
     margin-bottom: 12px;
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: #2d2a4a;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .back-btn:hover {
+    opacity: 0.7;
   }
 
   /* 並び替えセレクトボックス */
