@@ -73,6 +73,7 @@
       <!-- タイ語・日本語どちらもONのときだけ再生順を表示 -->
       {#if settings.autoPlayThai && settings.autoPlayJapanese}
         <div class="radio-group" style="margin-top: 12px">
+          <!-- ラジオボタン（再生順） -->
           <p class="setting-label" style="font-size: 14px; color: #999; margin: 0 0 8px 0">再生順</p>
           <label class="radio-label">
             <input type="radio" bind:group={settings.autoPlayOrder} value="thai_first" />
@@ -82,6 +83,16 @@
             <input type="radio" bind:group={settings.autoPlayOrder} value="japanese_first" />
             日本語 → タイ語
           </label>
+        </div>
+
+        <!-- 間隔設定 -->
+        <div class="setting-row" style="margin-top: 12px">
+          <p class="setting-label" style="font-size: 14px; color: #999; margin: 0">タイ語・日本語間の間隔</p>
+          <div class="number-input">
+            <button onclick={() => (settings.intervalBetweenAudio = Math.max(0, settings.intervalBetweenAudio - 0.5))}>−</button>
+            <span>{settings.intervalBetweenAudio.toFixed(1)}秒</span>
+            <button onclick={() => (settings.intervalBetweenAudio = Math.min(5, settings.intervalBetweenAudio + 0.5))}>＋</button>
+          </div>
         </div>
       {/if}
     </div>

@@ -8,6 +8,7 @@ const DEFAULTS = {
   autoAdvance: 3, // 自動送りの表示秒数
   autoAdvanceEnabled: false, // 自動送りのON/OFF
   loopEnabled: false, // ループのON/OFF
+  intervalBetweenAudio: 0, // タイ語と日本語の間の間隔（秒）
 };
 
 // localStorageのキー名

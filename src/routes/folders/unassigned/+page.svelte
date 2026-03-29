@@ -224,11 +224,15 @@
         }
       };
 
+      const waitInterval = () => new Promise((resolve) => setTimeout(resolve, settings.intervalBetweenAudio * 1000));
+
       if (settings.autoPlayOrder === "japanese_first") {
         await playJapanese();
+        await waitInterval();
         await playThai();
       } else {
         await playThai();
+        await waitInterval();
         await playJapanese();
       }
 
