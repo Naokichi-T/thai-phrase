@@ -8,6 +8,7 @@
   // メニュー項目の定義
   const menuItems = [
     { icon: "📖", label: "カードを見る", href: "/cards" },
+    { icon: "📁", label: "フォルダ", href: "/folders" },
     { icon: "🔍", label: "検索", href: "/search" },
     { icon: "⚙️", label: "設定", href: "/settings" },
   ];
