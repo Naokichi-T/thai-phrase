@@ -481,7 +481,7 @@
 <!-- ページ全体のコンテナ -->
 <div class="container">
   <!-- 並び順セレクトボックス -->
-  <div class="sort-area">
+  <div class="sort-area" style={fromSearch ? "justify-content: space-between" : ""}>
     {#if fromSearch}
       <button class="back-btn" onclick={() => history.back()}>← 検索結果に戻る</button>
     {/if}
@@ -890,7 +890,7 @@
     max-width: 800px;
     margin-bottom: 12px;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
   }
 

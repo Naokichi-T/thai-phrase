@@ -1,4 +1,5 @@
 <script>
+  import { goto } from "$app/navigation";
   // childrenは各ページのコンテンツを受け取る（Svelte5の書き方）
   let { children } = $props();
 
@@ -16,6 +17,12 @@
   // メニューを閉じる
   function closeMenu() {
     isMenuOpen = false;
+  }
+
+  async function goToCards() {
+    closeMenu();
+    await goto("/cards", { replaceState: true });
+    window.location.href = "/cards";
   }
 </script>
 
@@ -38,10 +45,17 @@
   <!-- ドロワーメニュー -->
   <nav class="drawer">
     {#each menuItems as item}
-      <a class="drawer-item" href={item.href} onclick={closeMenu}>
-        <span class="drawer-icon">{item.icon}</span>
-        <span class="drawer-label">{item.label}</span>
-      </a>
+      {#if item.href === "/cards"}
+        <button class="drawer-item" onclick={goToCards}>
+          <span class="drawer-icon">{item.icon}</span>
+          <span class="drawer-label">{item.label}</span>
+        </button>
+      {:else}
+        <a class="drawer-item" href={item.href} onclick={closeMenu}>
+          <span class="drawer-icon">{item.icon}</span>
+          <span class="drawer-label">{item.label}</span>
+        </a>
+      {/if}
     {/each}
   </nav>
 {/if}
@@ -127,5 +141,13 @@
 
   main {
     padding-top: 52px;
+  }
+
+  button.drawer-item {
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
   }
 </style>
