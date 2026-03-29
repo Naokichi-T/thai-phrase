@@ -2,12 +2,18 @@
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
 
-  let folders = $state([]); // フォルダのリスト
+  let folders = $state([]); // 全フォルダのフラットなリスト
+  let tree = $state([]); // ツリー構造に変換したフォルダ
   let userId = $state(null); // ログイン中のユーザーID
   let newFolderName = $state(""); // 新しいフォルダ名の入力値
+  // 開いているフォルダIDのセット（Setは重複なしのリスト）
+  let openFolderIds = $state(new Set());
+  // サブフォルダ作成中のフォルダID（nullのときは作成エリアを非表示）
+  let creatingUnder = $state(null);
+  // サブフォルダの名前入力値
+  let newSubFolderName = $state("");
 
   onMount(async () => {
-    // ログインしているか確認する
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -17,14 +23,12 @@
     }
 
     userId = session.user.id;
-
-    // フォルダ一覧を取得する
     await loadFolders();
   });
 
-  // フォルダ一覧をSupabaseから取得する
+  // フォルダ一覧をSupabaseから取得してツリーに変換する
   async function loadFolders() {
-    const { data, error } = await supabase.from("folders").select("*").eq("user_id", userId).order("name", { ascending: true }); // 名前順に並べる
+    const { data, error } = await supabase.from("folders").select("*").eq("user_id", userId).order("name", { ascending: true });
 
     if (error) {
       console.error("フォルダ取得エラー:", error);
@@ -32,17 +36,37 @@
     }
 
     folders = data;
+    tree = buildTree(folders, null); // ツリー構造に変換する
   }
 
-  // フォルダを作成する
+  /**
+   * フラットなフォルダリストをツリー構造に変換する関数
+   * 再帰的に呼び出すことで何階層でも対応できる
+   * @param {Array} allFolders - 全フォルダのリスト
+   * @param {number|null} parentId - 親フォルダのID（トップレベルはnull）
+   * @returns {Array} - ツリー構造のフォルダリスト
+   */
+  function buildTree(allFolders, parentId) {
+    return (
+      allFolders
+        // 指定した親IDを持つフォルダだけ取り出す
+        .filter((f) => f.parent_id === parentId)
+        .map((f) => ({
+          ...f,
+          // 子フォルダを再帰的に取得する
+          children: buildTree(allFolders, f.id),
+        }))
+    );
+  }
+
+  // フォルダを作成する（常にトップレベルで作成）
   async function createFolder() {
-    // 空文字のときは何もしない
     if (!newFolderName.trim()) return;
 
     const { error } = await supabase.from("folders").insert({
       user_id: userId,
       name: newFolderName.trim(),
-      parent_id: null, // トップレベルのフォルダ
+      parent_id: null, // トップレベル
     });
 
     if (error) {
@@ -50,13 +74,12 @@
       return;
     }
 
-    newFolderName = ""; // 入力欄をリセット
-    await loadFolders(); // 一覧を再取得する
+    newFolderName = "";
+    await loadFolders();
   }
 
   // フォルダを削除する
   async function deleteFolder(folderId) {
-    // 確認ダイアログを表示する
     if (!confirm("このフォルダを削除しますか？")) return;
 
     const { error } = await supabase.from("folders").delete().eq("id", folderId);
@@ -66,7 +89,49 @@
       return;
     }
 
-    await loadFolders(); // 一覧を再取得する
+    await loadFolders();
+  }
+
+  // フォルダの開閉を切り替える
+  function toggleOpen(folderId) {
+    if (openFolderIds.has(folderId)) {
+      openFolderIds.delete(folderId);
+    } else {
+      openFolderIds.add(folderId);
+    }
+    // Svelteに変更を伝えるために再代入する
+    openFolderIds = new Set(openFolderIds);
+  }
+
+  // サブフォルダ作成エリアを開く
+  function startCreatingUnder(folderId) {
+    creatingUnder = folderId;
+    newSubFolderName = "";
+  }
+
+  // サブフォルダを作成する
+  async function createSubFolder(parentId) {
+    if (!newSubFolderName.trim()) return;
+
+    const { error } = await supabase.from("folders").insert({
+      user_id: userId,
+      name: newSubFolderName.trim(),
+      parent_id: parentId, // 親フォルダのIDを設定する
+    });
+
+    if (error) {
+      console.error("サブフォルダ作成エラー:", error);
+      return;
+    }
+
+    creatingUnder = null;
+    newSubFolderName = "";
+
+    // 作成後に親フォルダを開いた状態にする
+    openFolderIds.add(parentId);
+    openFolderIds = new Set(openFolderIds);
+
+    await loadFolders();
   }
 </script>
 
@@ -79,18 +144,53 @@
     <button class="create-btn" onclick={createFolder}>作成</button>
   </div>
 
-  {#if folders.length === 0}
+  {#if tree.length === 0}
     <p class="empty">フォルダはまだありません</p>
   {:else}
-    <ul class="folder-list">
-      {#each folders as folder}
-        <li class="folder-item">
-          <!-- フォルダ名をタップするとそのフォルダのカードページに移動する -->
-          <a class="folder-link" href="/folders/{folder.id}">📁 {folder.name}</a>
-          <button class="delete-btn" onclick={() => deleteFolder(folder.id)}>削除</button>
-        </li>
-      {/each}
-    </ul>
+    <!-- ツリーを再帰的に表示するsnippet -->
+    {#snippet folderTree(nodes)}
+      <ul class="folder-list">
+        {#each nodes as folder}
+          <li class="folder-item">
+            <div class="folder-row">
+              <!-- 子フォルダがある場合は▶/▼を表示、クリックで開閉する -->
+              {#if folder.children.length > 0}
+                <button class="folder-arrow open-btn" onclick={() => toggleOpen(folder.id)}>
+                  {openFolderIds.has(folder.id) ? "▼" : "▶"}
+                </button>
+              {:else}
+                <span class="folder-arrow"> </span>
+              {/if}
+
+              <a class="folder-link" href="/folders/{folder.id}">📁 {folder.name}</a>
+
+              <!-- サブフォルダ追加ボタン -->
+              <button class="add-btn" onclick={() => startCreatingUnder(folder.id)}>＋</button>
+
+              <!-- 削除ボタン -->
+              <button class="delete-btn" onclick={() => deleteFolder(folder.id)}>削除</button>
+            </div>
+
+            <!-- サブフォルダ作成エリア：このフォルダの下に作成中のときだけ表示 -->
+            {#if creatingUnder === folder.id}
+              <div class="sub-create-area">
+                <input class="folder-input" type="text" placeholder="サブフォルダ名を入力..." bind:value={newSubFolderName} />
+                <button class="create-btn" onclick={() => createSubFolder(folder.id)}>作成</button>
+                <button class="cancel-btn" onclick={() => (creatingUnder = null)}>キャンセル</button>
+              </div>
+            {/if}
+
+            <!-- 子フォルダがあって、開いているときだけ表示する -->
+            {#if folder.children.length > 0 && openFolderIds.has(folder.id)}
+              {@render folderTree(folder.children)}
+            {/if}
+          </li>
+        {/each}
+      </ul>
+    {/snippet}
+
+    <!-- トップレベルのツリーを表示する -->
+    {@render folderTree(tree)}
   {/if}
 </div>
 
@@ -118,12 +218,7 @@
   }
 
   .folder-item {
-    padding: 12px 16px;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    margin-bottom: 8px;
-    font-size: 16px;
-    background: white;
+    margin-bottom: 4px;
   }
 
   /* フォルダ作成エリア */
@@ -162,13 +257,6 @@
     opacity: 0.85;
   }
 
-  /* フォルダ名と削除ボタンを横並びにする */
-  .folder-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
   /* 削除ボタン */
   .delete-btn {
     padding: 4px 12px;
@@ -193,5 +281,79 @@
 
   .folder-link:hover {
     text-decoration: underline;
+  }
+
+  /* フォルダの行（矢印・名前・削除ボタンを横並び） */
+  .folder-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+  }
+
+  /* 開閉矢印 */
+  .folder-arrow {
+    font-size: 12px;
+    color: #999;
+    width: 16px;
+    flex-shrink: 0;
+  }
+
+  /* サブフォルダはインデントで表現する */
+  .folder-list .folder-list {
+    padding-left: 24px;
+  }
+
+  /* サブフォルダ追加ボタン */
+  .add-btn {
+    background: none;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    color: #666;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 8px;
+    line-height: 1;
+  }
+
+  .add-btn:hover {
+    background: #f0f0f0;
+  }
+
+  /* キャンセルボタン */
+  .cancel-btn {
+    padding: 10px 16px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  .cancel-btn:hover {
+    background: #f0f0f0;
+  }
+
+  /* サブフォルダ作成エリア */
+  .sub-create-area {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    padding-left: 24px; /* 少しインデントする */
+  }
+
+  /* 開閉ボタン（▶/▼）*/
+  .open-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-size: 12px;
+    color: #999;
+    width: 16px;
+    flex-shrink: 0;
   }
 </style>
