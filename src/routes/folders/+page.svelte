@@ -6,6 +6,7 @@
   let tree = $state([]); // ツリー構造に変換したフォルダ
   let userId = $state(null); // ログイン中のユーザーID
   let newFolderName = $state(""); // 新しいフォルダ名の入力値
+  let unassignedCount = $state(0); // フォルダ未振り分けのフレーズ件数
   let openFolderIds = $state(new Set()); // 開いているフォルダIDのセット（Setは重複なしのリスト）
   let creatingUnder = $state(null); // サブフォルダ作成中のフォルダID（nullのときは作成エリアを非表示）
   let newSubFolderName = $state(""); // サブフォルダの名前入力値
@@ -24,6 +25,7 @@
 
     userId = session.user.id;
     await loadFolders();
+    await loadUnassignedCount();
   });
 
   // フォルダ一覧をSupabaseから取得してツリーに変換する
@@ -37,6 +39,28 @@
 
     folders = data;
     tree = buildTree(folders, null); // ツリー構造に変換する
+  }
+
+  // フォルダに入っていないフレーズの件数を取得する
+  async function loadUnassignedCount() {
+    // 自分がフォルダに入れたphrase_idをすべて取得する
+    const { data: assigned } = await supabase.from("phrase_folders").select("phrase_id, folders!inner(user_id)").eq("folders.user_id", userId);
+
+    // 登録済みのphrase_idのリストを作る
+    const assignedIds = assigned ? assigned.map((r) => r.phrase_id) : [];
+
+    if (assignedIds.length === 0) {
+      // 1件もフォルダに入っていない場合は全件が未振り分け
+      const { count } = await supabase.from("phrases").select("*", { count: "exact", head: true });
+      unassignedCount = count ?? 0;
+    } else {
+      // フォルダに入っていないフレーズだけ件数を取得する
+      const { count } = await supabase
+        .from("phrases")
+        .select("*", { count: "exact", head: true })
+        .not("id", "in", `(${assignedIds.join(",")})`);
+      unassignedCount = count ?? 0;
+    }
   }
 
   /**
@@ -76,6 +100,8 @@
 
     newFolderName = "";
     await loadFolders();
+
+    await loadUnassignedCount();
   }
 
   // フォルダを削除する
@@ -90,6 +116,7 @@
     }
 
     await loadFolders();
+    await loadUnassignedCount();
   }
 
   // フォルダの開閉を切り替える
@@ -237,6 +264,12 @@
       </ul>
     {/snippet}
 
+    <!-- 未振り分けフォルダ（常に先頭に表示） -->
+    <a class="unassigned-row" href="/folders/unassigned">
+      <span class="folder-arrow"> </span>
+      📋 未振り分け
+      <span class="unassigned-count">（{unassignedCount}件）</span>
+    </a>
     <!-- トップレベルのツリーを表示する -->
     {@render folderTree(tree)}
   {/if}
@@ -438,5 +471,30 @@
 
   .edit-btn:hover {
     background: #f0f0f0;
+  }
+
+  /* 未振り分けフォルダの行 */
+  .unassigned-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    text-decoration: none;
+    color: inherit;
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+
+  .unassigned-row:hover {
+    background: #f5f5f5;
+  }
+
+  /* 未振り分け件数 */
+  .unassigned-count {
+    font-size: 13px;
+    color: #999;
   }
 </style>
