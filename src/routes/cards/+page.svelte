@@ -21,6 +21,9 @@
   // 並び順：'asc'（昇順）/ 'desc'（降順）/ 'random'（ランダム）
   // localStorageから読み込む（なければ昇順をデフォルトにする）
   let sortOrder = $state(typeof window !== "undefined" ? (localStorage.getItem("cardSortOrder") ?? "asc") : "asc");
+  let allPhrases = $state([]); // フィルター前の全フレーズ
+  let allStatuses = $state({}); // 全フレーズのステータス（phrase_id → status）
+  let statusFilter = $state("all"); // 現在選択中のタブ
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -123,8 +126,13 @@
       return;
     }
 
-    // 取得後に並び順を適用する
-    phrases = sortPhrases(phraseData, sortOrder);
+    // 全フレーズのステータスを一括取得する
+    const phraseIds = phraseData.map((p) => p.id);
+    await loadAllStatuses(phraseIds);
+
+    // 全フレーズを保持しておく
+    allPhrases = sortPhrases(phraseData, sortOrder);
+    phrases = allPhrases;
 
     // 最初のフレーズのステータスを取得する
     await loadStatus(phraseData[0].id);
@@ -365,14 +373,58 @@
   // 並び順が変わったときの処理
   async function changeSortOrder(newOrder) {
     sortOrder = newOrder;
-    // localStorageに保存する
     localStorage.setItem("cardSortOrder", newOrder);
-    // 並び替えてから最初のカードに戻る
-    phrases = sortPhrases(phrases, newOrder);
+    allPhrases = sortPhrases(allPhrases, newOrder);
+    await changeStatusFilter(statusFilter);
+  }
+
+  // 全フレーズのステータスをまとめて取得する
+  async function loadAllStatuses(phraseIds) {
+    if (phraseIds.length === 0) return;
+
+    const { data, error } = await supabase.from("phrase_status").select("phrase_id, status").eq("user_id", userId).in("phrase_id", phraseIds);
+
+    if (error) {
+      console.error("ステータス一括取得エラー:", error);
+      return;
+    }
+
+    const map = {};
+    for (const row of data) {
+      map[row.phrase_id] = row.status;
+    }
+    allStatuses = map;
+  }
+
+  // ステータスタブを切り替える
+  async function changeStatusFilter(filter) {
+    statusFilter = filter;
     currentIndex = 0;
+
+    if (filter === "all") {
+      phrases = sortPhrases(allPhrases, sortOrder);
+    } else if (filter === "none") {
+      phrases = sortPhrases(
+        allPhrases.filter((p) => !allStatuses[p.id]),
+        sortOrder,
+      );
+    } else {
+      phrases = sortPhrases(
+        allPhrases.filter((p) => allStatuses[p.id] === filter),
+        sortOrder,
+      );
+    }
+
     if (phrases.length > 0) {
       await loadStatus(phrases[0].id);
     }
+  }
+
+  // 各タブの件数を返す
+  function countByFilter(filter) {
+    if (filter === "all") return allPhrases.length;
+    if (filter === "none") return allPhrases.filter((p) => !allStatuses[p.id]).length;
+    return allPhrases.filter((p) => allStatuses[p.id] === filter).length;
   }
 </script>
 
@@ -387,14 +439,28 @@
     </select>
   </div>
 
+  <!-- ステータスフィルタータブ -->
+  <div class="status-tabs">
+    {#each [{ key: "all", label: "すべて" }, { key: "ok", label: "OK" }, { key: "ng", label: "NG" }, { key: "pending", label: "保留" }, { key: "none", label: "未設定" }] as tab}
+      <button class="status-tab {statusFilter === tab.key ? 'active' : ''}" onclick={() => changeStatusFilter(tab.key)}>
+        {tab.label}
+        <span class="tab-count">{countByFilter(tab.key)}</span>
+      </button>
+    {/each}
+  </div>
+
   <!-- phraseがnullのあいだは「読み込み中」を表示する -->
-  {#if phrase === null}
+  {#if allPhrases.length === 0}
+    <p>読み込み中...</p>
+  {:else if phrases.length === 0}
+    <p class="empty">該当するフレーズはありません</p>
+  {:else if phrase === null}
     <p>読み込み中...</p>
   {:else}
     <!-- カード本体 -->
     <div class="card" role="region" aria-label="フレーズカード">
       <!-- お気に入りボタン：カード右上に配置 -->
-      <button class="favorite-btn" onclick={toggleFavorite}>
+      <button class="favorite-btn {isFavorite ? 'active' : ''}" onclick={toggleFavorite}>
         {isFavorite ? "★" : "☆"}
       </button>
       <!-- 表示順の記号 -->
@@ -580,45 +646,33 @@
     font-family: "Sarabun", sans-serif;
   }
 
-  /* OK：緑 */
-  .status-btn.ok.active {
-    background: #e6f4ea;
-    border-color: #4caf50;
-    color: #2e7d32;
-    font-weight: bold;
-  }
-
-  /* NG：赤 */
-  .status-btn.ng.active {
-    background: #fdecea;
-    border-color: #f44336;
-    color: #c62828;
-    font-weight: bold;
-  }
-
-  /* 保留：オレンジ */
-  .status-btn.pending.active {
-    background: #fff3e0;
-    border-color: #ff9800;
-    color: #e65100;
+  .status-btn.active {
+    background: white;
+    border-color: #2d2a4a;
+    border-width: 2px;
+    color: #2d2a4a;
     font-weight: bold;
   }
 
   /* お気に入りボタン：カード右上に固定 */
   .favorite-btn {
-    position: absolute; /* カードの中で位置を指定する */
+    position: absolute;
     top: 16px;
     right: 16px;
     background: none;
     border: none;
     font-size: 24px;
     cursor: pointer;
-    color: #f5a623; /* オレンジ系の黄色 */
+    color: #aaa; /* 未お気に入り：グレー */
     line-height: 1;
   }
 
   .favorite-btn:hover {
     transform: scale(1.2); /* ホバーで少し大きくなる */
+  }
+
+  .favorite-btn.active {
+    color: #2d2a4a;
   }
 
   /* メモエリア全体 */
@@ -794,5 +848,47 @@
     font-size: 14px;
     background: white;
     cursor: pointer;
+  }
+
+  .status-tabs {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .status-tab {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .status-tab.active {
+    background: white;
+    color: #2d2a4a;
+    border-color: #2d2a4a;
+    border-width: 2px;
+    font-weight: bold;
+  }
+
+  .tab-count {
+    font-size: 11px;
+    opacity: 0.8;
+  }
+
+  .empty {
+    color: #999;
+    font-size: 14px;
+    margin-top: 40px;
   }
 </style>

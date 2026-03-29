@@ -465,7 +465,7 @@
     <!-- カード本体 -->
     <div class="card" role="region" aria-label="フレーズカード">
       <!-- お気に入りボタン -->
-      <button class="favorite-btn" onclick={toggleFavorite}>
+      <button class="favorite-btn {isFavorite ? 'active' : ''}" onclick={toggleFavorite}>
         {isFavorite ? "★" : "☆"}
       </button>
 
@@ -641,24 +641,11 @@
     font-family: "Sarabun", sans-serif;
   }
 
-  .status-btn.ok.active {
-    background: #e6f4ea;
-    border-color: #4caf50;
-    color: #2e7d32;
-    font-weight: bold;
-  }
-
-  .status-btn.ng.active {
-    background: #fdecea;
-    border-color: #f44336;
-    color: #c62828;
-    font-weight: bold;
-  }
-
-  .status-btn.pending.active {
-    background: #fff3e0;
-    border-color: #ff9800;
-    color: #e65100;
+  .status-btn.active {
+    background: white;
+    border-color: #2d2a4a;
+    border-width: 2px;
+    color: #2d2a4a;
     font-weight: bold;
   }
 
@@ -670,8 +657,12 @@
     border: none;
     font-size: 24px;
     cursor: pointer;
-    color: #f5a623;
+    color: #aaa; /* 未お気に入り：グレー */
     line-height: 1;
+  }
+
+  .favorite-btn.active {
+    color: #2d2a4a;
   }
 
   .favorite-btn:hover {
