@@ -85,7 +85,8 @@
     <ul class="folder-list">
       {#each folders as folder}
         <li class="folder-item">
-          <span>📁 {folder.name}</span>
+          <!-- フォルダ名をタップするとそのフォルダのカードページに移動する -->
+          <a class="folder-link" href="/folders/{folder.id}">📁 {folder.name}</a>
           <button class="delete-btn" onclick={() => deleteFolder(folder.id)}>削除</button>
         </li>
       {/each}
@@ -181,5 +182,16 @@
 
   .delete-btn:hover {
     background: #fdecea;
+  }
+
+  /* フォルダ名リンク */
+  .folder-link {
+    text-decoration: none;
+    color: inherit;
+    flex: 1;
+  }
+
+  .folder-link:hover {
+    text-decoration: underline;
   }
 </style>
