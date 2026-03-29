@@ -18,6 +18,9 @@
   let folders = $state([]); // 全フォルダのリスト
   let selectedFolderIds = $state([]); // このフレーズが入っているフォルダIDのリスト
   let showFolderPicker = $state(false); // フォルダ選択エリアの開閉状態
+  // 並び順：'asc'（昇順）/ 'desc'（降順）/ 'random'（ランダム）
+  // localStorageから読み込む（なければ昇順をデフォルトにする）
+  let sortOrder = $state(typeof window !== "undefined" ? (localStorage.getItem("cardSortOrder") ?? "asc") : "asc");
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -120,7 +123,8 @@
       return;
     }
 
-    phrases = phraseData;
+    // 取得後に並び順を適用する
+    phrases = sortPhrases(phraseData, sortOrder);
 
     // 最初のフレーズのステータスを取得する
     await loadStatus(phraseData[0].id);
@@ -340,10 +344,49 @@
     currentIndex -= 1;
     await loadStatus(phrase.id);
   }
+
+  // フレーズを並び替える関数
+  function sortPhrases(phraseList, order) {
+    if (order === "asc") {
+      return [...phraseList].sort((a, b) => a.order_symbol.localeCompare(b.order_symbol));
+    } else if (order === "desc") {
+      return [...phraseList].sort((a, b) => b.order_symbol.localeCompare(a.order_symbol));
+    } else {
+      // ランダム（Fisher-Yatesシャッフル）
+      const arr = [...phraseList];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+  }
+
+  // 並び順が変わったときの処理
+  async function changeSortOrder(newOrder) {
+    sortOrder = newOrder;
+    // localStorageに保存する
+    localStorage.setItem("cardSortOrder", newOrder);
+    // 並び替えてから最初のカードに戻る
+    phrases = sortPhrases(phrases, newOrder);
+    currentIndex = 0;
+    if (phrases.length > 0) {
+      await loadStatus(phrases[0].id);
+    }
+  }
 </script>
 
 <!-- ページ全体のコンテナ -->
 <div class="container">
+  <!-- 並び順セレクトボックス -->
+  <div class="sort-area">
+    <select class="sort-select" value={sortOrder} onchange={(e) => changeSortOrder(e.target.value)}>
+      <option value="asc">記号の昇順</option>
+      <option value="desc">記号の降順</option>
+      <option value="random">ランダム</option>
+    </select>
+  </div>
+
   <!-- phraseがnullのあいだは「読み込み中」を表示する -->
   {#if phrase === null}
     <p>読み込み中...</p>
@@ -732,5 +775,24 @@
     font-size: 15px;
     cursor: pointer;
     border-bottom: 1px solid #f0f0f0;
+  }
+
+  /* 並び替えエリア */
+  .sort-area {
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  /* 並び替えセレクトボックス */
+  .sort-select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+    cursor: pointer;
   }
 </style>
