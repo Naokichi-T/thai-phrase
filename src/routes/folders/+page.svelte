@@ -6,12 +6,12 @@
   let tree = $state([]); // ツリー構造に変換したフォルダ
   let userId = $state(null); // ログイン中のユーザーID
   let newFolderName = $state(""); // 新しいフォルダ名の入力値
-  // 開いているフォルダIDのセット（Setは重複なしのリスト）
-  let openFolderIds = $state(new Set());
-  // サブフォルダ作成中のフォルダID（nullのときは作成エリアを非表示）
-  let creatingUnder = $state(null);
-  // サブフォルダの名前入力値
-  let newSubFolderName = $state("");
+  let openFolderIds = $state(new Set()); // 開いているフォルダIDのセット（Setは重複なしのリスト）
+  let creatingUnder = $state(null); // サブフォルダ作成中のフォルダID（nullのときは作成エリアを非表示）
+  let newSubFolderName = $state(""); // サブフォルダの名前入力値
+  let editingFolderId = $state(null); // 編集中のフォルダID（nullのときは編集エリアを非表示）
+  let editingName = $state(""); // 編集中のフォルダ名
+  let editingParentId = $state(null); // 編集中の親フォルダID
 
   onMount(async () => {
     const {
@@ -133,6 +133,34 @@
 
     await loadFolders();
   }
+
+  // 編集モードを開始する
+  function startEditing(folder) {
+    editingFolderId = folder.id;
+    editingName = folder.name;
+    editingParentId = folder.parent_id;
+  }
+
+  // フォルダ名と親フォルダを保存する
+  async function saveFolder() {
+    if (!editingName.trim()) return;
+
+    const { error } = await supabase
+      .from("folders")
+      .update({
+        name: editingName.trim(),
+        parent_id: editingParentId, // 親フォルダを更新する
+      })
+      .eq("id", editingFolderId);
+
+    if (error) {
+      console.error("フォルダ更新エラー:", error);
+      return;
+    }
+
+    editingFolderId = null;
+    await loadFolders();
+  }
 </script>
 
 <div class="container">
@@ -152,32 +180,52 @@
       <ul class="folder-list">
         {#each nodes as folder}
           <li class="folder-item">
-            <div class="folder-row">
-              <!-- 子フォルダがある場合は▶/▼を表示、クリックで開閉する -->
-              {#if folder.children.length > 0}
-                <button class="folder-arrow open-btn" onclick={() => toggleOpen(folder.id)}>
-                  {openFolderIds.has(folder.id) ? "▼" : "▶"}
-                </button>
-              {:else}
-                <span class="folder-arrow"> </span>
-              {/if}
-
-              <a class="folder-link" href="/folders/{folder.id}">📁 {folder.name}</a>
-
-              <!-- サブフォルダ追加ボタン -->
-              <button class="add-btn" onclick={() => startCreatingUnder(folder.id)}>＋</button>
-
-              <!-- 削除ボタン -->
-              <button class="delete-btn" onclick={() => deleteFolder(folder.id)}>削除</button>
-            </div>
-
-            <!-- サブフォルダ作成エリア：このフォルダの下に作成中のときだけ表示 -->
-            {#if creatingUnder === folder.id}
-              <div class="sub-create-area">
-                <input class="folder-input" type="text" placeholder="サブフォルダ名を入力..." bind:value={newSubFolderName} />
-                <button class="create-btn" onclick={() => createSubFolder(folder.id)}>作成</button>
-                <button class="cancel-btn" onclick={() => (creatingUnder = null)}>キャンセル</button>
+            {#if editingFolderId === folder.id}
+              <!-- 編集モード -->
+              <div class="edit-area">
+                <!-- フォルダ名の入力欄 -->
+                <input class="folder-input" type="text" bind:value={editingName} />
+                <!-- 親フォルダの選択 -->
+                <select class="parent-select" bind:value={editingParentId}>
+                  <option value={null}>トップレベル</option>
+                  {#each folders.filter((f) => f.id !== folder.id) as f}
+                    <option value={f.id}>📁 {f.name}</option>
+                  {/each}
+                </select>
+                <button class="create-btn" onclick={saveFolder}>保存</button>
+                <button class="cancel-btn" onclick={() => (editingFolderId = null)}>キャンセル</button>
               </div>
+            {:else}
+              <!-- 通常モード -->
+              <div class="folder-row">
+                {#if folder.children.length > 0}
+                  <button class="folder-arrow open-btn" onclick={() => toggleOpen(folder.id)}>
+                    {openFolderIds.has(folder.id) ? "▼" : "▶"}
+                  </button>
+                {:else}
+                  <span class="folder-arrow"> </span>
+                {/if}
+
+                <a class="folder-link" href="/folders/{folder.id}">📁 {folder.name}</a>
+
+                <!-- 編集ボタン -->
+                <button class="edit-btn" onclick={() => startEditing(folder)}>編集</button>
+
+                <!-- サブフォルダ追加ボタン -->
+                <button class="add-btn" onclick={() => startCreatingUnder(folder.id)}>＋</button>
+
+                <!-- 削除ボタン -->
+                <button class="delete-btn" onclick={() => deleteFolder(folder.id)}>削除</button>
+              </div>
+
+              <!-- サブフォルダ作成エリア -->
+              {#if creatingUnder === folder.id}
+                <div class="sub-create-area">
+                  <input class="folder-input" type="text" placeholder="サブフォルダ名を入力..." bind:value={newSubFolderName} />
+                  <button class="create-btn" onclick={() => createSubFolder(folder.id)}>作成</button>
+                  <button class="cancel-btn" onclick={() => (creatingUnder = null)}>キャンセル</button>
+                </div>
+              {/if}
             {/if}
 
             <!-- 子フォルダがあって、開いているときだけ表示する -->
@@ -355,5 +403,40 @@
     color: #999;
     width: 16px;
     flex-shrink: 0;
+  }
+
+  /* 編集エリア */
+  .edit-area {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid #aaa;
+    border-radius: 8px;
+    background: #f9f9f9;
+  }
+
+  /* 親フォルダ選択 */
+  .parent-select {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    background: white;
+  }
+
+  /* 編集ボタン */
+  .edit-btn {
+    background: none;
+    border: 1px solid #aaa;
+    border-radius: 4px;
+    color: #666;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 8px;
+  }
+
+  .edit-btn:hover {
+    background: #f0f0f0;
   }
 </style>
