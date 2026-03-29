@@ -126,8 +126,8 @@
         {#each results as phrase}
           <li>
             <a class="result-item" href={cardLink(phrase.id)}>
-              <p class="result-thai">{phrase.thai}</p>
-              <p class="result-japanese">{phrase.japanese}</p>
+              <p class="result-thai">{@html phrase.thai}</p>
+              <p class="result-japanese">{@html phrase.japanese}</p>
             </a>
           </li>
         {/each}

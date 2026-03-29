@@ -484,7 +484,7 @@
       <!-- 音声ボタンとタイ語フレーズ -->
       <div class="phrase-row">
         <button class="audio-btn" onclick={() => playAudio(phrase.audio_th, loadSettings().speedThai)}>🔊</button>
-        <p class="thai">{phrase.thai}</p>
+        <p class="thai">{@html phrase.thai}</p>
       </div>
 
       <hr />
@@ -492,7 +492,7 @@
       <!-- 音声ボタンと日本語フレーズ -->
       <div class="phrase-row">
         <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja, loadSettings().speedJapanese)}>🔊</button>
-        <p class="japanese">{phrase.japanese}</p>
+        <p class="japanese">{@html phrase.japanese}</p>
       </div>
 
       <!-- ステータスボタン -->

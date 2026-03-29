@@ -281,14 +281,14 @@
 
       <div class="phrase-row">
         <button class="audio-btn" onclick={() => playAudio(phrase.audio_th, loadSettings().speedThai)}>🔊</button>
-        <p class="thai">{phrase.thai}</p>
+        <p class="thai">{@html phrase.thai}</p>
       </div>
 
       <hr />
 
       <div class="phrase-row">
         <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja, loadSettings().speedJapanese)}>🔊</button>
-        <p class="japanese">{phrase.japanese}</p>
+        <p class="japanese">{@html phrase.japanese}</p>
       </div>
 
       <div class="status-buttons">
