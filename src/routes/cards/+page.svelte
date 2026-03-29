@@ -382,16 +382,20 @@
   async function loadAllStatuses(phraseIds) {
     if (phraseIds.length === 0) return;
 
-    const { data, error } = await supabase.from("phrase_status").select("phrase_id, status").eq("user_id", userId).in("phrase_id", phraseIds);
+    const { data, error } = await supabase.from("phrase_status").select("phrase_id, status, is_favorite").eq("user_id", userId).in("phrase_id", phraseIds);
 
     if (error) {
       console.error("ステータス一括取得エラー:", error);
       return;
     }
 
+    // { phrase_id: { status, is_favorite } } の形に変換する
     const map = {};
     for (const row of data) {
-      map[row.phrase_id] = row.status;
+      map[row.phrase_id] = {
+        status: row.status,
+        isFavorite: row.is_favorite,
+      };
     }
     allStatuses = map;
   }
@@ -404,13 +408,21 @@
     if (filter === "all") {
       phrases = sortPhrases(allPhrases, sortOrder);
     } else if (filter === "none") {
+      // ステータス未設定
       phrases = sortPhrases(
-        allPhrases.filter((p) => !allStatuses[p.id]),
+        allPhrases.filter((p) => !allStatuses[p.id]?.status),
+        sortOrder,
+      );
+    } else if (filter === "favorite") {
+      // お気に入り
+      phrases = sortPhrases(
+        allPhrases.filter((p) => allStatuses[p.id]?.isFavorite),
         sortOrder,
       );
     } else {
+      // ok / ng / pending で絞り込む
       phrases = sortPhrases(
-        allPhrases.filter((p) => allStatuses[p.id] === filter),
+        allPhrases.filter((p) => allStatuses[p.id]?.status === filter),
         sortOrder,
       );
     }
@@ -423,8 +435,9 @@
   // 各タブの件数を返す
   function countByFilter(filter) {
     if (filter === "all") return allPhrases.length;
-    if (filter === "none") return allPhrases.filter((p) => !allStatuses[p.id]).length;
-    return allPhrases.filter((p) => allStatuses[p.id] === filter).length;
+    if (filter === "none") return allPhrases.filter((p) => !allStatuses[p.id]?.status).length;
+    if (filter === "favorite") return allPhrases.filter((p) => allStatuses[p.id]?.isFavorite).length;
+    return allPhrases.filter((p) => allStatuses[p.id]?.status === filter).length;
   }
 </script>
 
@@ -441,7 +454,7 @@
 
   <!-- ステータスフィルタータブ -->
   <div class="status-tabs">
-    {#each [{ key: "all", label: "すべて" }, { key: "ok", label: "OK" }, { key: "ng", label: "NG" }, { key: "pending", label: "保留" }, { key: "none", label: "未設定" }] as tab}
+    {#each [{ key: "all", label: "すべて" }, { key: "favorite", label: "★" }, { key: "ok", label: "OK" }, { key: "ng", label: "NG" }, { key: "pending", label: "保留" }, { key: "none", label: "未設定" }] as tab}
       <button class="status-tab {statusFilter === tab.key ? 'active' : ''}" onclick={() => changeStatusFilter(tab.key)}>
         {tab.label}
         <span class="tab-count">{countByFilter(tab.key)}</span>
