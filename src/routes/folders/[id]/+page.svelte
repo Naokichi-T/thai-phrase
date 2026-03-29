@@ -25,6 +25,9 @@
   // 並び順：'asc'（昇順）/ 'desc'（降順）/ 'random'（ランダム）
   // localStorageから読み込む（なければ昇順をデフォルトにする）
   let sortOrder = $state(typeof window !== "undefined" ? (localStorage.getItem("folderSortOrder") ?? "asc") : "asc");
+  let allPhrases = $state([]); // フィルター前の全フレーズ（絞り込みの元データ）
+  let allStatuses = $state({}); // 全フレーズのステータスをまとめて保持する（phrase_id → status）
+  let statusFilter = $state("all"); // 現在選択中のタブ（'all'/'ok'/'ng'/'pending'/'none'）
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -139,8 +142,12 @@
       return;
     }
 
-    // 取得後に並び順を適用する
-    phrases = sortPhrases(phraseData, sortOrder);
+    // 全フレーズのステータスを一括取得する
+    await loadAllStatuses(phraseIds);
+
+    // 全フレーズを保持しておく
+    allPhrases = sortPhrases(phraseData, sortOrder);
+    phrases = allPhrases;
 
     if (phrases.length > 0) {
       await loadStatus(phrases[0].id);
@@ -356,14 +363,72 @@
   // 並び順が変わったときの処理
   async function changeSortOrder(newOrder) {
     sortOrder = newOrder;
-    // localStorageに保存する
     localStorage.setItem("folderSortOrder", newOrder);
-    // 並び替えてから最初のカードに戻る
-    phrases = sortPhrases(phrases, newOrder);
+    // allPhrasesも並び替える
+    allPhrases = sortPhrases(allPhrases, newOrder);
+    // 現在のフィルターを再適用する
+    await changeStatusFilter(statusFilter);
+  }
+
+  /**
+   * 全フレーズのステータスをまとめて取得する
+   * カード1枚ずつ取得するより効率的
+   */
+  async function loadAllStatuses(phraseIds) {
+    if (phraseIds.length === 0) return;
+
+    const { data, error } = await supabase.from("phrase_status").select("phrase_id, status").eq("user_id", userId).in("phrase_id", phraseIds);
+
+    if (error) {
+      console.error("ステータス一括取得エラー:", error);
+      return;
+    }
+
+    // { phrase_id: status } の形に変換する（例：{ 1: 'ok', 2: 'ng' }）
+    const map = {};
+    for (const row of data) {
+      map[row.phrase_id] = row.status;
+    }
+    allStatuses = map;
+  }
+
+  /**
+   * ステータスタブを切り替える
+   * @param {string} filter - 'all'/'ok'/'ng'/'pending'/'none'
+   */
+  async function changeStatusFilter(filter) {
+    statusFilter = filter;
     currentIndex = 0;
+
+    if (filter === "all") {
+      phrases = sortPhrases(allPhrases, sortOrder);
+    } else if (filter === "none") {
+      // ステータス未設定（phrase_statusにないもの）
+      phrases = sortPhrases(
+        allPhrases.filter((p) => !allStatuses[p.id]),
+        sortOrder,
+      );
+    } else {
+      // ok / ng / pending で絞り込む
+      phrases = sortPhrases(
+        allPhrases.filter((p) => allStatuses[p.id] === filter),
+        sortOrder,
+      );
+    }
+
     if (phrases.length > 0) {
       await loadStatus(phrases[0].id);
     }
+  }
+
+  /**
+   * 各タブの件数を返す
+   * @param {string} filter
+   */
+  function countByFilter(filter) {
+    if (filter === "all") return allPhrases.length;
+    if (filter === "none") return allPhrases.filter((p) => !allStatuses[p.id]).length;
+    return allPhrases.filter((p) => allStatuses[p.id] === filter).length;
   }
 </script>
 
@@ -380,8 +445,20 @@
     </select>
   </div>
 
-  {#if phrases.length === 0}
+  <!-- ステータスフィルタータブ -->
+  <div class="status-tabs">
+    {#each [{ key: "all", label: "すべて" }, { key: "ok", label: "OK" }, { key: "ng", label: "NG" }, { key: "pending", label: "保留" }, { key: "none", label: "未設定" }] as tab}
+      <button class="status-tab {statusFilter === tab.key ? 'active' : ''}" onclick={() => changeStatusFilter(tab.key)}>
+        {tab.label}
+        <span class="tab-count">{countByFilter(tab.key)}</span>
+      </button>
+    {/each}
+  </div>
+
+  {#if allPhrases.length === 0}
     <p class="empty">このフォルダにフレーズはまだありません</p>
+  {:else if phrases.length === 0}
+    <p class="empty">該当するフレーズはありません</p>
   {:else if phrase === null}
     <p>読み込み中...</p>
   {:else}
@@ -762,5 +839,43 @@
     font-size: 14px;
     background: white;
     cursor: pointer;
+  }
+
+  /* ステータスフィルタータブ */
+  .status-tabs {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 12px;
+    flex-wrap: wrap; /* スマホで折り返す */
+  }
+
+  .status-tab {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: white;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .status-tab.active {
+    background: white;
+    color: #2d2a4a;
+    border-color: #2d2a4a;
+    border-width: 2px;
+    font-weight: bold;
+  }
+
+  /* タブの件数 */
+  .tab-count {
+    font-size: 11px;
+    opacity: 0.8;
   }
 </style>
