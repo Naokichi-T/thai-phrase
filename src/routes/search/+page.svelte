@@ -98,7 +98,15 @@
     <!-- 検索対象の選択 -->
     <div class="target-tabs">
       {#each [{ key: "thai", label: "タイ語" }, { key: "japanese", label: "日本語" }, { key: "memo", label: "メモ" }] as tab}
-        <button class="target-tab {searchTarget === tab.key ? 'active' : ''}" onclick={() => (searchTarget = tab.key)}>
+        <button
+          class="target-tab {searchTarget === tab.key ? 'active' : ''}"
+          onclick={() => {
+            searchTarget = tab.key;
+            // タブを切り替えたら検索結果をクリアする（inputの内容は残す）
+            results = [];
+            isSearched = false;
+          }}
+        >
           {tab.label}
         </button>
       {/each}
