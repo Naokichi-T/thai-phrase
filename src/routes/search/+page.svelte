@@ -106,7 +106,18 @@
 
     <!-- 入力欄と検索ボタン -->
     <div class="input-row">
-      <input class="search-input" type="text" placeholder="{targetLabel(searchTarget)}で検索..." bind:value={searchQuery} onkeydown={(e) => e.key === "Enter" && search()} />
+      <input
+        class="search-input"
+        type="text"
+        placeholder="{targetLabel(searchTarget)}で検索..."
+        bind:value={searchQuery}
+        onkeydown={(e) => {
+          // IME変換中（ひらがな→漢字の変換確定前）のEnterは無視する
+          // これをしないとひらがなが二重に入力される
+          if (e.isComposing) return;
+          if (e.key === "Enter") search();
+        }}
+      />
       <button class="search-btn" onclick={search} disabled={isLoading}>
         {isLoading ? "検索中..." : "検索"}
       </button>
