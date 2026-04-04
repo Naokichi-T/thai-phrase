@@ -4,30 +4,42 @@
   import { supabase } from "$lib/supabase";
   import { loadSettings } from "$lib/settings";
 
+  let folderName = $state("");
+  let phrases = $state([]);
+  let currentIndex = $state(0);
+  let phrase = $derived(phrases[currentIndex] ?? null);
+  let status = $state(null);
+  let isFavorite = $state(false);
+  let memoText = $state("");
+  let showMemo = $state(false);
+  let userId = $state(null);
+  let currentAudio = null;
+  let isStopped = $state(false);
+  let touchStartX = 0;
+  let folders = $state([]);
+  let selectedFolderIds = $state([]);
+  let showFolderPicker = $state(false);
+  let sortOrder = $state(typeof window !== "undefined" ? (localStorage.getItem("folderSortOrder") ?? "asc") : "asc");
+  let allPhrases = $state([]);
+  let allStatuses = $state({});
+  let statusFilter = $state("all");
+  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
+  let expandedFolderIds = $state(
+    (() => {
+      if (typeof window === "undefined") return new Set();
+      const saved = localStorage.getItem("folderExpandedIds");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    })(),
+  );
+  let folderListExpanded = $state(
+    (() => {
+      if (typeof window === "undefined") return false;
+      return localStorage.getItem("folderListExpanded") === "true";
+    })(),
+  );
+
   // URLの[id]部分を取得する（例：/folders/3 → "3"）
   const folderId = $derived(Number($page.params.id));
-
-  let folderName = $state(""); // フォルダ名
-  let phrases = $state([]); // このフォルダのフレーズリスト
-  let currentIndex = $state(0); // 今表示しているカードの位置
-  let phrase = $derived(phrases[currentIndex] ?? null); // 今表示しているフレーズ
-  let status = $state(null); // カードのステータス
-  let isFavorite = $state(false); // お気に入り
-  let memoText = $state(""); // メモの内容
-  let showMemo = $state(false); // メモの開閉状態
-  let userId = $state(null); // ログイン中のユーザーID
-  let currentAudio = null; // 再生中のAudioオブジェクト
-  let isStopped = $state(false); // 自動送りが停止中かどうか
-  let touchStartX = 0; // スワイプ開始時のX座標
-  let folders = $state([]); // 全フォルダのリスト
-  let selectedFolderIds = $state([]); // このフレーズが入っているフォルダIDのリスト
-  let showFolderPicker = $state(false); // フォルダ選択エリアの開閉状態
-  // 並び順：'asc'（昇順）/ 'desc'（降順）/ 'random'（ランダム）
-  // localStorageから読み込む（なければ昇順をデフォルトにする）
-  let sortOrder = $state(typeof window !== "undefined" ? (localStorage.getItem("folderSortOrder") ?? "asc") : "asc");
-  let allPhrases = $state([]); // フィルター前の全フレーズ（絞り込みの元データ）
-  let allStatuses = $state({}); // 全フレーズのステータスをまとめて保持する（phrase_id → status）
-  let statusFilter = $state("all"); // 現在選択中のタブ（'all'/'ok'/'ng'/'pending'/'none'）
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -233,20 +245,17 @@
       }));
   }
 
-  // ツリーをインデントレベル付きのフラットなリストに変換する
-  function flattenTree(nodes, depth = 0) {
+  function flattenTree(nodes, depth = 0, visible = true) {
     const result = [];
     for (const node of nodes) {
-      result.push({ ...node, depth });
+      result.push({ ...node, depth, visible });
       if (node.children.length > 0) {
-        result.push(...flattenTree(node.children, depth + 1));
+        const childVisible = folderListExpanded || expandedFolderIds.has(node.id);
+        result.push(...flattenTree(node.children, depth + 1, childVisible));
       }
     }
     return result;
   }
-
-  // 表示用のフォルダリスト
-  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
 
   // チェックボックスを切り替えたときの処理
   async function toggleFolder(folderId) {
@@ -457,6 +466,23 @@
     if (filter === "favorite") return allPhrases.filter((p) => allStatuses[p.id]?.isFavorite).length;
     return allPhrases.filter((p) => allStatuses[p.id]?.status === filter).length;
   }
+
+  function toggleExpand(folderId) {
+    const next = new Set(expandedFolderIds);
+    if (next.has(folderId)) {
+      next.delete(folderId);
+    } else {
+      next.add(folderId);
+    }
+    expandedFolderIds = next;
+    // LocalStorageに保存する（SetはJSONに直接変換できないので配列にする）
+    localStorage.setItem("folderExpandedIds", JSON.stringify([...next]));
+  }
+
+  function toggleFolderListExpanded() {
+    folderListExpanded = !folderListExpanded;
+    localStorage.setItem("folderListExpanded", String(folderListExpanded));
+  }
 </script>
 
 <div class="container">
@@ -542,14 +568,34 @@
           {#if folders.length === 0}
             <p class="folder-empty">フォルダがありません。<a href="/folders">フォルダを作る</a></p>
           {:else}
+            <div class="folder-list-header">
+              <button class="btn-folder-expand-toggle" onclick={toggleFolderListExpanded}>
+                {folderListExpanded ? "折りたたむ" : "すべて開く"}
+              </button>
+            </div>
             <ul class="folder-check-list">
               {#each flatFolders as folder}
-                <li>
-                  <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
-                    <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
-                    📁 {folder.name}
-                  </label>
-                </li>
+                {#if folder.visible}
+                  <li>
+                    <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
+                      {#if folder.children.length > 0}
+                        <button
+                          class="btn-expand"
+                          onclick={(e) => {
+                            e.preventDefault();
+                            toggleExpand(folder.id);
+                          }}
+                        >
+                          {folderListExpanded || expandedFolderIds.has(folder.id) ? "▼" : "▶"}
+                        </button>
+                      {:else}
+                        <span class="expand-placeholder"></span>
+                      {/if}
+                      <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
+                      📁 {folder.name}
+                    </label>
+                  </li>
+                {/if}
               {/each}
             </ul>
           {/if}
@@ -895,5 +941,45 @@
   .tab-count {
     font-size: 11px;
     opacity: 0.8;
+  }
+
+  .folder-list-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  .btn-folder-expand-toggle {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .btn-folder-expand-toggle:hover {
+    color: #444;
+  }
+
+  .btn-expand {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 10px;
+    color: #aaa;
+    padding: 0 4px 0 0;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .btn-expand:hover {
+    color: #666;
+  }
+
+  .expand-placeholder {
+    display: inline-block;
+    width: 16px;
+    flex-shrink: 0;
   }
 </style>

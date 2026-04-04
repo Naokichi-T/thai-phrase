@@ -3,8 +3,8 @@
   import { supabase } from "$lib/supabase";
   import { loadSettings } from "$lib/settings";
 
-  let phrases = $state([]); // 未振り分けのフレーズリスト
-  let currentIndex = $state(0); // 今表示しているカードの位置
+  let phrases = $state([]);
+  let currentIndex = $state(0);
   let phrase = $derived(phrases[currentIndex] ?? null);
   let status = $state(null);
   let isFavorite = $state(false);
@@ -17,6 +17,20 @@
   let folders = $state([]);
   let selectedFolderIds = $state([]);
   let showFolderPicker = $state(false);
+  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
+  let expandedFolderIds = $state(
+    (() => {
+      if (typeof window === "undefined") return new Set();
+      const saved = localStorage.getItem("folderExpandedIds");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    })(),
+  );
+  let folderListExpanded = $state(
+    (() => {
+      if (typeof window === "undefined") return false;
+      return localStorage.getItem("folderListExpanded") === "true";
+    })(),
+  );
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -95,18 +109,17 @@
     return allFolders.filter((f) => f.parent_id === parentId).map((f) => ({ ...f, children: buildTree(allFolders, f.id) }));
   }
 
-  function flattenTree(nodes, depth = 0) {
+  function flattenTree(nodes, depth = 0, visible = true) {
     const result = [];
     for (const node of nodes) {
-      result.push({ ...node, depth });
+      result.push({ ...node, depth, visible });
       if (node.children.length > 0) {
-        result.push(...flattenTree(node.children, depth + 1));
+        const childVisible = folderListExpanded || expandedFolderIds.has(node.id);
+        result.push(...flattenTree(node.children, depth + 1, childVisible));
       }
     }
     return result;
   }
-
-  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
 
   // このフレーズがどのフォルダに入っているか取得する
   async function loadPhraseFolders(phraseId) {
@@ -280,6 +293,23 @@
     }
     await loadStatus(phrase.id);
   }
+
+  function toggleExpand(folderId) {
+    const next = new Set(expandedFolderIds);
+    if (next.has(folderId)) {
+      next.delete(folderId);
+    } else {
+      next.add(folderId);
+    }
+    expandedFolderIds = next;
+    // LocalStorageに保存する（SetはJSONに直接変換できないので配列にする）
+    localStorage.setItem("folderExpandedIds", JSON.stringify([...next]));
+  }
+
+  function toggleFolderListExpanded() {
+    folderListExpanded = !folderListExpanded;
+    localStorage.setItem("folderListExpanded", String(folderListExpanded));
+  }
 </script>
 
 <div class="container">
@@ -337,14 +367,34 @@
           {#if folders.length === 0}
             <p class="folder-empty">フォルダがありません。<a href="/folders">フォルダを作る</a></p>
           {:else}
+            <div class="folder-list-header">
+              <button class="btn-folder-expand-toggle" onclick={toggleFolderListExpanded}>
+                {folderListExpanded ? "折りたたむ" : "すべて開く"}
+              </button>
+            </div>
             <ul class="folder-check-list">
               {#each flatFolders as folder}
-                <li>
-                  <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
-                    <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
-                    📁 {folder.name}
-                  </label>
-                </li>
+                {#if folder.visible}
+                  <li>
+                    <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
+                      {#if folder.children.length > 0}
+                        <button
+                          class="btn-expand"
+                          onclick={(e) => {
+                            e.preventDefault();
+                            toggleExpand(folder.id);
+                          }}
+                        >
+                          {folderListExpanded || expandedFolderIds.has(folder.id) ? "▼" : "▶"}
+                        </button>
+                      {:else}
+                        <span class="expand-placeholder"></span>
+                      {/if}
+                      <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
+                      📁 {folder.name}
+                    </label>
+                  </li>
+                {/if}
               {/each}
             </ul>
           {/if}
@@ -628,5 +678,45 @@
 
   .stop-btn:hover {
     background: #fdecea;
+  }
+
+  .folder-list-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+  .btn-folder-expand-toggle {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .btn-folder-expand-toggle:hover {
+    color: #444;
+  }
+
+  .btn-expand {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 10px;
+    color: #aaa;
+    padding: 0 4px 0 0;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .btn-expand:hover {
+    color: #666;
+  }
+
+  .expand-placeholder {
+    display: inline-block;
+    width: 16px;
+    flex-shrink: 0;
   }
 </style>

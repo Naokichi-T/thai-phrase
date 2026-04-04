@@ -26,6 +26,26 @@
   let allStatuses = $state({}); // 全フレーズのステータス（phrase_id → status）
   let statusFilter = $state("all"); // 現在選択中のタブ
   let fromSearch = $state(false); // 検索から来たかどうか
+  // 開閉状態を考慮したフォルダリスト
+  // expandedFolderIds または folderListExpanded が変わったら自動で再計算される
+  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
+  // フォルダ選択UIの展開状態を管理するSet（開いている親フォルダのIDを入れる）
+  // LocalStorageから復元する（なければ空のSet）
+  let expandedFolderIds = $state(
+    (() => {
+      if (typeof window === "undefined") return new Set();
+      const saved = localStorage.getItem("folderExpandedIds");
+      return saved ? new Set(JSON.parse(saved)) : new Set();
+    })(),
+  );
+  // フォルダ一覧を「すべて展開」して表示するかどうかのフラグ
+  // LocalStorageから復元する（なければfalse）
+  let folderListExpanded = $state(
+    (() => {
+      if (typeof window === "undefined") return false;
+      return localStorage.getItem("folderListExpanded") === "true";
+    })(),
+  );
 
   const STORAGE_BASE_URL = "https://rwimifrjznpyawegcysd.supabase.co/storage/v1/object/public/phrase-audio/";
 
@@ -225,25 +245,26 @@
   }
 
   /**
-   * ツリー構造をフラットな配列に変換する（インデントレベル付き）
-   * チェックボックスリストの表示に使う
+   * ツリー構造をフラットな配列に変換する（開閉状態を考慮）
+   * folderListExpanded が true のときはすべて表示する
+   * false のときは expandedFolderIds に含まれる親フォルダだけ子を表示する
    * @param {Array} nodes - ツリーのノード
    * @param {number} depth - 現在の階層の深さ（0始まり）
+   * @param {boolean} visible - 親が開いているかどうか（最上位はtrue）
    */
-  function flattenTree(nodes, depth = 0) {
+  function flattenTree(nodes, depth = 0, visible = true) {
     const result = [];
     for (const node of nodes) {
-      result.push({ ...node, depth }); // depthを付けて追加する
+      // このノード自体は常に追加する（ただし親が閉じていたら非表示）
+      result.push({ ...node, depth, visible });
       if (node.children.length > 0) {
-        // 子フォルダを再帰的に追加する
-        result.push(...flattenTree(node.children, depth + 1));
+        // 「すべて展開」がON、またはこのフォルダが開いているとき → 子を表示する
+        const childVisible = folderListExpanded || expandedFolderIds.has(node.id);
+        result.push(...flattenTree(node.children, depth + 1, childVisible));
       }
     }
     return result;
   }
-
-  // ツリー構造にしてからフラットに展開したフォルダリスト
-  let flatFolders = $derived(flattenTree(buildTree(folders, null)));
 
   // このフレーズがどのフォルダに入っているか取得する
   async function loadPhraseFolders(phraseId) {
@@ -494,6 +515,33 @@
     if (filter === "favorite") return allPhrases.filter((p) => allStatuses[p.id]?.isFavorite).length;
     return allPhrases.filter((p) => allStatuses[p.id]?.status === filter).length;
   }
+
+  /**
+   * フォルダの展開・折りたたみを切り替える関数
+   * expandedFolderIds に入っていれば削除、なければ追加する
+   * LocalStorage にも保存する
+   * @param {number} folderId - 切り替えるフォルダのID
+   */
+  function toggleExpand(folderId) {
+    const next = new Set(expandedFolderIds);
+    if (next.has(folderId)) {
+      next.delete(folderId);
+    } else {
+      next.add(folderId);
+    }
+    expandedFolderIds = next;
+    // LocalStorageに保存する（SetはJSONに直接変換できないので配列にする）
+    localStorage.setItem("folderExpandedIds", JSON.stringify([...next]));
+  }
+
+  /**
+   * 「すべて展開 / 折りたたむ」を切り替える関数
+   * LocalStorage にも保存する
+   */
+  function toggleFolderListExpanded() {
+    folderListExpanded = !folderListExpanded;
+    localStorage.setItem("folderListExpanded", String(folderListExpanded));
+  }
 </script>
 
 <!-- ページ全体のコンテナ -->
@@ -591,14 +639,38 @@
           {#if folders.length === 0}
             <p class="folder-empty">フォルダがありません。<a href="/folders">フォルダを作る</a></p>
           {:else}
+            <!--「すべて開く / 折りたたむ」ボタン -->
+            <div class="folder-list-header">
+              <button class="btn-folder-expand-toggle" onclick={toggleFolderListExpanded}>
+                {folderListExpanded ? "折りたたむ" : "すべて開く"}
+              </button>
+            </div>
             <ul class="folder-check-list">
               {#each flatFolders as folder}
-                <li>
-                  <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
-                    <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
-                    📁 {folder.name}
-                  </label>
-                </li>
+                <!-- 親が閉じているときは非表示にする -->
+                {#if folder.visible}
+                  <li>
+                    <label class="folder-check-item" style="padding-left: {folder.depth * 20}px">
+                      <!-- 子フォルダがあるとき：▶/▼ボタンを表示する -->
+                      {#if folder.children.length > 0}
+                        <button
+                          class="btn-expand"
+                          onclick={(e) => {
+                            e.preventDefault(); // labelのチェックボックス連動を防ぐ
+                            toggleExpand(folder.id);
+                          }}
+                        >
+                          {folderListExpanded || expandedFolderIds.has(folder.id) ? "▼" : "▶"}
+                        </button>
+                      {:else}
+                        <!-- 子フォルダがないとき：▶の代わりに余白を入れる -->
+                        <span class="expand-placeholder"></span>
+                      {/if}
+                      <input type="checkbox" checked={selectedFolderIds.includes(folder.id)} onchange={() => toggleFolder(folder.id)} />
+                      📁 {folder.name}
+                    </label>
+                  </li>
+                {/if}
               {/each}
             </ul>
           {/if}
@@ -976,5 +1048,50 @@
     color: #999;
     font-size: 14px;
     margin-top: 40px;
+  }
+
+  /* 「すべて開く / 折りたたむ」ボタンのエリア */
+  .folder-list-header {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+  }
+
+  /* 「すべて開く / 折りたたむ」テキストボタン */
+  .btn-folder-expand-toggle {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+
+  .btn-folder-expand-toggle:hover {
+    color: #444;
+  }
+
+  /* ▶/▼ 展開ボタン */
+  .btn-expand {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 10px;
+    color: #aaa;
+    padding: 0 4px 0 0;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .btn-expand:hover {
+    color: #666;
+  }
+
+  /* 子フォルダがないときの▶の代わりの余白 */
+  .expand-placeholder {
+    display: inline-block;
+    width: 16px; /* ▶ボタンと同じ幅を確保する */
+    flex-shrink: 0;
   }
 </style>
