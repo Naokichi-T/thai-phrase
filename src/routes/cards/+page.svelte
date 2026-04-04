@@ -53,10 +53,18 @@
     document.addEventListener("touchstart", handleTouchStart, { passive: true });
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
+    // ← →キーでカードを移動する（PCキーボード操作）
+    function handleKeyDown(e) {
+      if (e.key === "ArrowRight") nextCard(); // →キー → 次へ
+      if (e.key === "ArrowLeft") prevCard(); // ←キー → 前へ
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
     // コンポーネントが破棄されたときにイベントを解除する
     return () => {
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   });
 
@@ -354,9 +362,12 @@
    * 次のカードに移動する
    */
   async function nextCard() {
-    if (currentIndex >= phrases.length - 1) return;
     isStopped = false; // 手動で次へ移動したら停止を解除する
-    currentIndex += 1;
+    if (currentIndex >= phrases.length - 1) {
+      currentIndex = 0;
+    } else {
+      currentIndex += 1;
+    }
     await loadStatus(phrase.id);
   }
 
@@ -364,9 +375,12 @@
    * 前のカードに移動する
    */
   async function prevCard() {
-    if (currentIndex <= 0) return;
     isStopped = false; // 手動で前へ移動したら停止を解除する
-    currentIndex -= 1;
+    if (currentIndex <= 0) {
+      currentIndex = phrases.length - 1;
+    } else {
+      currentIndex -= 1;
+    }
     await loadStatus(phrase.id);
   }
 
@@ -594,7 +608,7 @@
     <!-- 前後移動ボタン -->
     {#if phrases.length > 0}
       <div class="navigation">
-        <button class="nav-btn" onclick={prevCard} disabled={currentIndex === 0}>← 前へ</button>
+        <button class="nav-btn" onclick={prevCard}>← 前へ</button>
 
         <div class="nav-center">
           <span class="nav-count">{currentIndex + 1} / {phrases.length}</span>
@@ -604,7 +618,7 @@
           {/if}
         </div>
 
-        <button class="nav-btn" onclick={nextCard} disabled={currentIndex === phrases.length - 1}>次へ →</button>
+        <button class="nav-btn" onclick={nextCard}>次へ →</button>
       </div>
     {/if}
   {/if}

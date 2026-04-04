@@ -54,9 +54,16 @@
     document.addEventListener("touchstart", handleTouchStart, { passive: true });
     document.addEventListener("touchend", handleTouchEnd, { passive: true });
 
+    function handleKeyDown(e) {
+      if (e.key === "ArrowRight") nextCard();
+      if (e.key === "ArrowLeft") prevCard();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+
     return () => {
       document.removeEventListener("touchstart", handleTouchStart);
       document.removeEventListener("touchend", handleTouchEnd);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   });
 
@@ -331,17 +338,23 @@
 
   // 次のカードに移動する
   async function nextCard() {
-    if (currentIndex >= phrases.length - 1) return;
     isStopped = false;
-    currentIndex += 1;
+    if (currentIndex >= phrases.length - 1) {
+      currentIndex = 0;
+    } else {
+      currentIndex += 1;
+    }
     await loadStatus(phrase.id);
   }
 
   // 前のカードに移動する
   async function prevCard() {
-    if (currentIndex <= 0) return;
     isStopped = false;
-    currentIndex -= 1;
+    if (currentIndex <= 0) {
+      currentIndex = phrases.length - 1;
+    } else {
+      currentIndex -= 1;
+    }
     await loadStatus(phrase.id);
   }
 
@@ -546,7 +559,7 @@
 
     <!-- 前後移動ボタン -->
     <div class="navigation">
-      <button class="nav-btn" onclick={prevCard} disabled={currentIndex === 0}>← 前へ</button>
+      <button class="nav-btn" onclick={prevCard}>← 前へ</button>
 
       <div class="nav-center">
         <span class="nav-count">{currentIndex + 1} / {phrases.length}</span>
@@ -555,7 +568,7 @@
         {/if}
       </div>
 
-      <button class="nav-btn" onclick={nextCard} disabled={currentIndex === phrases.length - 1}>次へ →</button>
+      <button class="nav-btn" onclick={nextCard}>次へ →</button>
     </div>
   {/if}
 </div>
