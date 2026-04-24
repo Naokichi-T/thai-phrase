@@ -38,6 +38,20 @@
       </div>
     </div>
 
+    <!-- タイ語のボリューム -->
+    <div class="setting-item">
+      <p class="setting-label">
+        タイ語のボリューム
+        <span class="speed-value">{settings.volumeThai.toFixed(1)}</span>
+      </p>
+      <input type="range" class="slider" min={0.1} max={1.0} step={0.1} bind:value={settings.volumeThai} />
+      <div class="slider-labels">
+        <span>0.0</span>
+        <span>0.5</span>
+        <span>1.0</span>
+      </div>
+    </div>
+
     <hr />
 
     <!-- 日本語の再生スピード -->
@@ -51,6 +65,20 @@
         <span>0.70</span>
         <span>1.00</span>
         <span>1.30</span>
+      </div>
+    </div>
+
+    <!-- 日本語のボリューム -->
+    <div class="setting-item">
+      <p class="setting-label">
+        日本語のボリューム
+        <span class="speed-value">{settings.volumeJapanese.toFixed(1)}</span>
+      </p>
+      <input type="range" class="slider" min={0.1} max={1.0} step={0.1} bind:value={settings.volumeJapanese} />
+      <div class="slider-labels">
+        <span>0.0</span>
+        <span>0.5</span>
+        <span>1.0</span>
       </div>
     </div>
 

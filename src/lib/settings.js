@@ -2,6 +2,8 @@
 const DEFAULTS = {
   speedThai: 1.0, // タイ語の再生スピード 0.7〜1.3の範囲
   speedJapanese: 1.0, // 日本語の再生スピード 0.7〜1.3の範囲
+  volumeThai: 1.0, // タイ語のボリューム 0.1〜1.0の範囲
+  volumeJapanese: 1.0, // 日本語のボリューム 0.1〜1.0の範囲
   autoPlayThai: false, // タイ語を自動再生するか
   autoPlayJapanese: false, // 日本語を自動再生するか
   autoPlayOrder: "thai_first", // 再生順：'thai_first' or 'japanese_first'

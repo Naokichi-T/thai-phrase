@@ -65,7 +65,7 @@
     };
   });
 
-  function playAudio(filename, speed) {
+  function playAudio(filename, speed, volume = 1.0) {
     return new Promise((resolve) => {
       if (currentAudio) {
         currentAudio.pause();
@@ -74,6 +74,7 @@
       const url = STORAGE_BASE_URL + filename;
       const audio = new Audio(url);
       audio.playbackRate = speed;
+      audio.volume = volume; // ボリュームを設定する（0.0〜1.0）
       audio.onended = () => resolve();
       currentAudio = audio;
       audio.play();
@@ -236,12 +237,12 @@
 
       const playThai = async () => {
         if (settings.autoPlayThai && phrase?.audio_th) {
-          await playAudio(phrase.audio_th, settings.speedThai);
+          await playAudio(phrase.audio_th, settings.speedThai, settings.volumeThai);
         }
       };
       const playJapanese = async () => {
         if (settings.autoPlayJapanese && phrase?.audio_ja) {
-          await playAudio(phrase.audio_ja, settings.speedJapanese);
+          await playAudio(phrase.audio_ja, settings.speedJapanese, settings.volumeJapanese);
         }
       };
 
@@ -328,14 +329,14 @@
       <p class="order">{phrase.order_symbol}</p>
 
       <div class="phrase-row">
-        <button class="audio-btn" onclick={() => playAudio(phrase.audio_th, loadSettings().speedThai)}>🔊</button>
+        <button class="audio-btn" onclick={() => playAudio(phrase.audio_th, loadSettings().speedThai, loadSettings().volumeThai)}>🔊</button>
         <p class="thai">{@html phrase.thai}</p>
       </div>
 
       <hr />
 
       <div class="phrase-row">
-        <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja, loadSettings().speedJapanese)}>🔊</button>
+        <button class="audio-btn" onclick={() => playAudio(phrase.audio_ja, loadSettings().speedJapanese, loadSettings().volumeJapanese)}>🔊</button>
         <p class="japanese">{@html phrase.japanese}</p>
       </div>
 
